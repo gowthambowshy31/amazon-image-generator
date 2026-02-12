@@ -11,6 +11,7 @@ interface Product {
   title: string
   asin?: string
   category?: string
+  metadata?: any
   sourceImages: SourceImage[]
   images?: GeneratedImage[]
 }
@@ -310,7 +311,8 @@ export default function GenerateVideoPage() {
               id: product.id,
               title: product.title,
               category: product.category,
-              asin: product.asin
+              asin: product.asin,
+              metadata: product.metadata
             }}
             initialTemplateId={initialTemplateId}
             onSelectionChange={(selections) => {

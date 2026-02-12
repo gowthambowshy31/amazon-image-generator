@@ -30,6 +30,7 @@ interface Product {
   title: string
   category?: string | null
   asin?: string | null
+  metadata?: any
 }
 
 export interface TemplateSelection {
@@ -84,12 +85,25 @@ export default function TemplateSelector({
     for (const tmpl of selectedTemplates) {
       for (const variable of tmpl.variables) {
         if (variable.type === "AUTO" && variable.autoFillSource) {
-          if (variable.autoFillSource === "product.title") {
+          const source = variable.autoFillSource
+          if (source === "product.title") {
             autoValues[variable.name] = product.title
-          } else if (variable.autoFillSource === "product.category" && product.category) {
+          } else if (source === "product.category" && product.category) {
             autoValues[variable.name] = product.category
-          } else if (variable.autoFillSource === "product.asin" && product.asin) {
+          } else if (source === "product.asin" && product.asin) {
             autoValues[variable.name] = product.asin
+          } else if (source === "metadata.brand" && product.metadata?.brand) {
+            autoValues[variable.name] = product.metadata.brand
+          } else if (source === "metadata.manufacturer" && product.metadata?.manufacturer) {
+            autoValues[variable.name] = product.metadata.manufacturer
+          } else if (source.startsWith("metadata.attributes.") && product.metadata?.attributes) {
+            const attrKey = source.replace("metadata.attributes.", "")
+            const attrValue = product.metadata.attributes[attrKey]
+            if (Array.isArray(attrValue) && attrValue[0]?.value) {
+              autoValues[variable.name] = attrValue[0].value
+            } else if (typeof attrValue === "string") {
+              autoValues[variable.name] = attrValue
+            }
           }
         }
       }

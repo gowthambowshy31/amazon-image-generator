@@ -67,10 +67,48 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // Get SKU and product type from metadata (or use ASIN as fallback for SKU)
+    // Get SKU and product type from metadata
     const metadata = product.metadata as any
-    const sku = metadata?.sku || product.asin
-    const productType = metadata?.productType || 'PRODUCT'
+    let productType = metadata?.productType || 'PRODUCT'
+
+    // SKU resolution: metadata > fetch from Amazon inventory > ASIN fallback
+    let sku = metadata?.sku
+    if (!sku) {
+      console.log(`No SKU in product metadata for ASIN ${product.asin}, fetching from Amazon inventory...`)
+      const amazonSPForSku = getAmazonSPClient()
+      const fetchedSku = await amazonSPForSku.getSellerSKUByASIN(product.asin!)
+      if (fetchedSku) {
+        sku = fetchedSku
+
+        // Also fetch listing to get correct productType
+        let fetchedProductType: string | undefined
+        try {
+          const listing = await amazonSPForSku.getListingItem(fetchedSku)
+          fetchedProductType = listing?.summaries?.[0]?.productType
+          if (fetchedProductType) {
+            productType = fetchedProductType
+          }
+        } catch (listingErr) {
+          console.warn('Could not fetch listing for product type:', listingErr)
+        }
+
+        // Save SKU and productType to product metadata for future use
+        await prisma.product.update({
+          where: { id: productId },
+          data: {
+            metadata: {
+              ...(metadata || {}),
+              sku: fetchedSku,
+              ...(fetchedProductType ? { productType: fetchedProductType } : {})
+            }
+          }
+        })
+        console.log(`Saved SKU "${fetchedSku}" and productType "${fetchedProductType || productType}" to product metadata`)
+      } else {
+        console.warn(`Could not find SKU for ASIN ${product.asin} in Amazon inventory, falling back to ASIN`)
+        sku = product.asin
+      }
+    }
 
     // Create push records with PENDING status
     const pushRecords = await Promise.all(images.map(async ({ generatedImageId, amazonSlot }) => {

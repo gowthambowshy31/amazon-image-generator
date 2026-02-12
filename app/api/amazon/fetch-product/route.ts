@@ -44,6 +44,14 @@ export async function POST(request: NextRequest) {
         where: { role: 'ADMIN' }
       })
 
+      // Try to get the Seller SKU from Amazon inventory
+      let sellerSku: string | null = null
+      try {
+        sellerSku = await amazonSP.getSellerSKUByASIN(asin)
+      } catch (skuErr) {
+        console.warn('Could not fetch SKU from inventory:', skuErr)
+      }
+
       product = await prisma.product.create({
         data: {
           asin,
@@ -52,6 +60,8 @@ export async function POST(request: NextRequest) {
           metadata: {
             brand: amazonProduct.brand,
             manufacturer: amazonProduct.manufacturer,
+            productType: amazonProduct.productType,
+            ...(sellerSku ? { sku: sellerSku } : {}),
             attributes: amazonProduct.attributes
           },
           createdById: adminUser?.id || 'system'

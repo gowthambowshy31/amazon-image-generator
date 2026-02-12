@@ -308,6 +308,52 @@ export class AmazonSPService {
   }
 
   /**
+   * Get the Seller SKU for a given ASIN by searching FBA inventory
+   * The Seller SKU is required by the Listings API (not the ASIN)
+   */
+  async getSellerSKUByASIN(asin: string): Promise<string | null> {
+    try {
+      const marketplaceId = process.env.AMAZON_MARKETPLACE_ID || "ATVPDKIKX0DER"
+      let nextToken: string | undefined = undefined
+
+      do {
+        const queryParams: any = {
+          marketplaceIds: marketplaceId,
+          granularityType: "Marketplace",
+          granularityId: marketplaceId
+        }
+
+        if (nextToken) {
+          queryParams.nextToken = nextToken
+        }
+
+        const response = await this.client.callAPI({
+          operation: "getInventorySummaries",
+          endpoint: "fbaInventory",
+          query: queryParams
+        })
+
+        if (response && response.inventorySummaries) {
+          for (const item of response.inventorySummaries) {
+            if (item.asin === asin && item.sellerSku) {
+              console.log(`Found SKU "${item.sellerSku}" for ASIN "${asin}"`)
+              return item.sellerSku
+            }
+          }
+        }
+
+        nextToken = response?.nextToken
+      } while (nextToken)
+
+      console.warn(`No SKU found in FBA inventory for ASIN "${asin}"`)
+      return null
+    } catch (error) {
+      console.error("Error fetching SKU by ASIN:", error)
+      return null
+    }
+  }
+
+  /**
    * Update product images on Amazon listing using Listings Items API
    * Uses PATCH operation to update specific image attributes
    *

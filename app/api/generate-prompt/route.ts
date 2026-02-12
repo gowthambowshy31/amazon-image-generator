@@ -14,25 +14,29 @@ const requestSchema = z.object({
 
 const ANALYSIS_PROMPT = `You are an expert product photographer and AI image generation prompt engineer specializing in jewelry photography for e-commerce listings.
 
-Analyze this jewelry product image with extreme attention to detail and generate ONE highly detailed, comprehensive prompt that can be used with an AI image generation model.
+Analyze this jewelry product image to understand the TYPE and CATEGORY of jewelry, then generate ONE detailed, GENERIC and REUSABLE prompt that works for ANY piece of jewelry in this same category.
+
+IMPORTANT: The prompt must NOT be specific to this exact piece. It should be a reusable template prompt that works for any similar jewelry item. For example:
+- If you see diamond hoop earrings, write a prompt that works for ANY hoop earrings (not just this specific pair)
+- If you see a gold chain necklace, write a prompt that works for ANY chain necklace
+- Use generic terms like "the jewelry piece", "the earrings", "the necklace" instead of overly specific descriptions
 
 Your response MUST follow this exact format:
 
 PRODUCT_DESCRIPTION:
-[2-3 sentence description of the jewelry piece - type, metal, stones, design, finish]
+[2-3 sentence description of what category/type of jewelry this is]
 
 GENERATION_PROMPT:
-[A single, extremely detailed paragraph of 150-250 words. This must be a comprehensive image generation prompt that captures EVERY visual detail of this product. Include:
-- Exact jewelry type and style (e.g., huggie hoop, solitaire pendant, tennis bracelet)
-- Metal type, color, and finish (e.g., polished 14k yellow gold, brushed platinum)
-- Stone details: type, cut, setting style, arrangement, size, clarity, color
-- Design features: texture, patterns, engravings, structural elements
-- Physical characteristics: thickness, dimensions, closure mechanism
-- Light interaction: how the metal reflects, how stones refract and sparkle
-- Surface quality: polish level, any matte or satin sections
-- Overall aesthetic and style impression
+[A single, detailed paragraph of 150-250 words. This must be a REUSABLE image generation prompt for this category of jewelry. Include:
+- The general jewelry category and style (e.g., hoop earrings, pendant necklace, tennis bracelet)
+- General material descriptors (e.g., polished metal, precious stones) rather than exact specs
+- How light should interact with this type of jewelry (reflections, sparkle, brilliance)
+- Professional photography setup: lighting style, background, camera angle, composition
+- Surface quality expectations: polish, shimmer, clarity of stones
+- Scene/mood: elegant, luxurious, clean, modern
+- Amazon listing quality requirements: clean background, high detail, commercial appeal
 
-The prompt should be so detailed that someone could recreate an identical piece from the description alone. Write it as a direct image generation instruction, not a description. Professional product photography quality, suitable for Amazon listing imagery.]
+The prompt should work as a DROP-IN template for any piece of jewelry in this category. When used with a source image, the AI model will combine this prompt with the actual product to generate the final image. Write it as a direct image generation instruction. Professional product photography quality, suitable for Amazon listing imagery.]
 
 Keep language precise, technical, and photography-focused.`
 

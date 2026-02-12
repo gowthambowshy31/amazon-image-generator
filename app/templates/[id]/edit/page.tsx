@@ -19,7 +19,29 @@ interface Variable {
 const AUTO_FILL_OPTIONS = [
   { value: "product.title", label: "Product Title" },
   { value: "product.category", label: "Product Category" },
-  { value: "product.asin", label: "Product ASIN" }
+  { value: "product.asin", label: "Product ASIN" },
+  { value: "metadata.brand", label: "Brand" },
+  { value: "metadata.manufacturer", label: "Manufacturer" },
+  { value: "metadata.attributes.color", label: "Color" },
+  { value: "metadata.attributes.material", label: "Material" },
+  { value: "metadata.attributes.item_weight", label: "Weight" },
+  { value: "metadata.attributes.metal_type", label: "Metal Type" },
+  { value: "metadata.attributes.gem_type", label: "Gem Type" },
+  { value: "metadata.attributes.clarity", label: "Clarity" },
+  { value: "metadata.attributes.carat_weight", label: "Carat Weight" },
+  { value: "metadata.attributes.total_diamond_weight", label: "Total Diamond Weight" },
+  { value: "metadata.attributes.item_shape", label: "Shape" },
+  { value: "metadata.attributes.style", label: "Style" },
+  { value: "metadata.attributes.finish_type", label: "Finish Type" },
+  { value: "metadata.attributes.setting_type", label: "Setting Type" },
+  { value: "metadata.attributes.stone_shape", label: "Stone Shape" },
+  { value: "metadata.attributes.number_of_stones", label: "Number of Stones" },
+  { value: "metadata.attributes.size", label: "Size" },
+  { value: "metadata.attributes.pattern", label: "Pattern" },
+  { value: "metadata.attributes.item_dimensions", label: "Dimensions" },
+  { value: "metadata.attributes.chain_type", label: "Chain Type" },
+  { value: "metadata.attributes.closure_type", label: "Closure Type" },
+  { value: "metadata.attributes.department", label: "Department" }
 ]
 
 export default function EditTemplatePage() {
