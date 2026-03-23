@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { requireAuth } from "@/lib/auth-helpers"
 import { z } from "zod"
 
 const variableSchema = z.object({
@@ -25,6 +26,10 @@ const createTemplateSchema = z.object({
 // GET /api/templates - List all templates
 export async function GET(request: NextRequest) {
   try {
+    const authResult = await requireAuth()
+    if (authResult.error) return authResult.error
+    const { user } = authResult
+
     const { searchParams } = new URL(request.url)
     const category = searchParams.get("category")
     const includeInactive = searchParams.get("includeInactive") === "true"
@@ -60,6 +65,10 @@ export async function GET(request: NextRequest) {
 // POST /api/templates - Create a new template
 export async function POST(request: NextRequest) {
   try {
+    const authResult = await requireAuth()
+    if (authResult.error) return authResult.error
+    const { user } = authResult
+
     const body = await request.json()
     const validated = createTemplateSchema.parse(body)
 

@@ -46,8 +46,12 @@ next-env.d.ts
 
 /app/generated/prisma
 
-# test outputs and temp files
-test-image-response.json
-video-operation.json
-nul
-WorkCode
+# Google OAuth credentials & tokens
+google-credentials.json
+google-oauth-credentials.json
+google-drive-token.json
+client_secret_*.json
+privosa-*.json
+
+# Exports
+/exports/

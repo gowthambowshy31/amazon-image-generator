@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { requireAuth } from "@/lib/auth-helpers"
 import { generateImage } from "@/lib/gemini"
 import { uploadToS3 } from "@/lib/s3"
 import { z } from "zod"
@@ -44,13 +45,12 @@ const generateImageSchema = z.object({
 // POST /api/images/generate - Generate a single image
 export async function POST(request: NextRequest) {
   try {
+    const authResult = await requireAuth()
+    if (authResult.error) return authResult.error
+    const { user } = authResult
+
     const body = await request.json()
     const validated = generateImageSchema.parse(body)
-
-    // Get default admin user for logging
-    const adminUser = await prisma.user.findFirst({
-      where: { role: 'ADMIN' }
-    })
 
     // Get product with source images
     const product = await prisma.product.findUnique({
@@ -271,7 +271,7 @@ export async function POST(request: NextRequest) {
           usedGeneratedImage: !!validated.generatedImageId
         },
         parentImageId: validated.parentImageId,
-        generatedById: adminUser?.id || 'system'
+        generatedById: user.id
       }
     })
 
@@ -406,23 +406,21 @@ export async function POST(request: NextRequest) {
     })
 
     // Log activity
-    if (adminUser) {
-      await prisma.activityLog.create({
-        data: {
-          userId: adminUser.id,
-          action: "GENERATE_IMAGE",
-          entityType: "GeneratedImage",
-          entityId: updatedImage.id,
-          metadata: {
-            productId: product.id,
-            productTitle: product.title,
-            imageType: displayName,
-            templateId: template?.id || null,
-            version
-          }
+    await prisma.activityLog.create({
+      data: {
+        userId: user.id,
+        action: "GENERATE_IMAGE",
+        entityType: "GeneratedImage",
+        entityId: updatedImage.id,
+        metadata: {
+          productId: product.id,
+          productTitle: product.title,
+          imageType: displayName,
+          templateId: template?.id || null,
+          version
         }
-      })
-    }
+      }
+    })
 
     // Update analytics
     const today = new Date()

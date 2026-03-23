@@ -2,6 +2,11 @@
 
 import { useEffect, useState, useCallback } from "react"
 import Link from "next/link"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Badge } from "@/components/ui/badge"
+import { Card, CardContent } from "@/components/ui/card"
 
 interface TemplateVariable {
   id: string
@@ -244,33 +249,38 @@ export default function TemplateSelector({
 
   if (loading) {
     return (
-      <div className="bg-white rounded-lg shadow p-6 mb-6">
-        <div className="animate-pulse">
-          <div className="h-6 bg-gray-200 rounded w-1/3 mb-4"></div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {[1, 2, 3].map(i => (
-              <div key={i} className="h-24 bg-gray-200 rounded"></div>
-            ))}
+      <Card className="shadow-sm mb-6">
+        <CardContent className="p-6">
+          <div className="animate-pulse">
+            <div className="h-6 bg-accent rounded w-1/3 mb-4"></div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {[1, 2, 3].map(i => (
+                <div key={i} className="h-24 bg-accent rounded"></div>
+              ))}
+            </div>
           </div>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
     )
   }
 
   if (templates.length === 0) {
     return (
-      <div className="bg-white rounded-lg shadow p-6 mb-6">
-        <div className="text-center py-6">
-          <p className="text-gray-500 mb-3">No templates available.</p>
-          <Link
-            href="/templates/new"
-            target="_blank"
-            className="inline-block px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
-          >
-            Create Your First Template
-          </Link>
-        </div>
-      </div>
+      <Card className="shadow-sm mb-6">
+        <CardContent className="p-6">
+          <div className="text-center py-6">
+            <p className="text-muted-foreground mb-3">No templates available.</p>
+            <Button asChild>
+              <Link
+                href="/templates/new"
+                target="_blank"
+              >
+                Create Your First Template
+              </Link>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
     )
   }
 
@@ -278,182 +288,193 @@ export default function TemplateSelector({
   const hasVariables = uniqueVariables.length > 0 && selectedIds.size > 0
 
   return (
-    <div className="bg-white rounded-lg shadow p-6 mb-6">
-      {/* Header */}
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-lg font-semibold text-gray-900">
-          Select Templates to Generate
-        </h2>
-        <div className="flex items-center gap-3">
-          {mode === "multi" && (
-            <>
-              <button
-                onClick={selectAll}
-                className="px-3 py-1 text-sm text-blue-600 hover:bg-blue-50 rounded"
-              >
-                Select All
-              </button>
-              <button
-                onClick={deselectAll}
-                className="px-3 py-1 text-sm text-gray-600 hover:bg-gray-50 rounded"
-              >
-                Deselect All
-              </button>
-            </>
-          )}
-          <button
-            onClick={() => loadTemplates(true)}
-            disabled={refreshing}
-            className="text-sm text-gray-600 hover:text-gray-700 disabled:opacity-50"
-            title="Refresh templates"
-          >
-            {refreshing ? "..." : "Refresh"}
-          </button>
-          <Link
-            href="/templates"
-            target="_blank"
-            className="text-sm text-blue-600 hover:text-blue-700 hover:underline font-medium"
-          >
-            Manage Templates
-          </Link>
-        </div>
-      </div>
-
-      {/* Template Card Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
-        {templates.map((template) => {
-          const isSelected = selectedIds.has(template.id)
-          return (
-            <div
-              key={template.id}
-              onClick={() => toggleTemplate(template.id)}
-              className={`border-2 rounded-lg p-4 cursor-pointer transition ${
-                isSelected
-                  ? "border-blue-600 bg-blue-50"
-                  : "border-gray-200 hover:border-gray-300"
-              }`}
+    <Card className="shadow-sm mb-6">
+      <CardContent className="p-6">
+        {/* Header */}
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-lg font-semibold text-foreground">
+            Select Templates to Generate
+          </h2>
+          <div className="flex items-center gap-3">
+            {mode === "multi" && (
+              <>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={selectAll}
+                  className="text-primary hover:bg-primary/10"
+                >
+                  Select All
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={deselectAll}
+                  className="text-muted-foreground hover:bg-accent"
+                >
+                  Deselect All
+                </Button>
+              </>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => loadTemplates(true)}
+              disabled={refreshing}
+              className="text-muted-foreground hover:text-muted-foreground"
             >
-              <div className="flex items-start justify-between mb-2">
-                <h3 className="font-semibold text-gray-900">{template.name}</h3>
-                <input
-                  type={mode === "multi" ? "checkbox" : "radio"}
-                  checked={isSelected}
-                  onChange={() => {}}
-                  name="template-selector"
-                  className="mt-1 flex-shrink-0"
-                />
-              </div>
-              {template.description && (
-                <p className="text-sm text-gray-600 line-clamp-2 mb-2">{template.description}</p>
-              )}
-              <div className="flex items-center gap-2">
-                {template.variables.length > 0 && (
-                  <span className="text-xs text-gray-500">
-                    {template.variables.length} variable{template.variables.length !== 1 ? "s" : ""}
-                  </span>
-                )}
-                <span className={`text-xs px-2 py-0.5 rounded-full ${
-                  template.category === "image"
-                    ? "bg-blue-100 text-blue-700"
-                    : template.category === "video"
-                    ? "bg-purple-100 text-purple-700"
-                    : "bg-green-100 text-green-700"
-                }`}>
-                  {template.category}
-                </span>
-              </div>
-            </div>
-          )
-        })}
-      </div>
-
-      {/* Variable Inputs — shown when templates are selected and have non-AUTO variables */}
-      {hasVariables && uniqueVariables.some(v => v.type !== "AUTO") && (
-        <div className="border-t pt-4 mt-2">
-          <h3 className="text-sm font-medium text-gray-700 mb-3">
-            Fill in Variables
-          </h3>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-            {uniqueVariables.map((variable) => (
-              <div key={variable.name}>
-                <label className="block text-sm text-gray-600 mb-1">
-                  {variable.displayName}
-                  {variable.isRequired && <span className="text-red-500 ml-1">*</span>}
-                  {variable.type === "AUTO" && (
-                    <span className="text-cyan-600 ml-1 text-xs">(auto-filled)</span>
-                  )}
-                </label>
-
-                {variable.type === "DROPDOWN" && variable.options.length > 0 ? (
-                  <select
-                    value={variableValues[variable.name] || ""}
-                    onChange={(e) => setVariableValues(prev => ({
-                      ...prev,
-                      [variable.name]: e.target.value
-                    }))}
-                    className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    <option value="">Select {variable.displayName.toLowerCase()}...</option>
-                    {variable.options.map((opt) => (
-                      <option key={opt} value={opt}>{opt}</option>
-                    ))}
-                  </select>
-                ) : (
-                  <input
-                    type="text"
-                    value={variableValues[variable.name] || ""}
-                    onChange={(e) => setVariableValues(prev => ({
-                      ...prev,
-                      [variable.name]: e.target.value
-                    }))}
-                    placeholder={variable.defaultValue || `Enter ${variable.displayName.toLowerCase()}`}
-                    disabled={variable.type === "AUTO"}
-                    className={`w-full border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                      variable.type === "AUTO" ? "bg-gray-50 text-gray-500" : "text-gray-900"
-                    }`}
-                  />
-                )}
-              </div>
-            ))}
+              {refreshing ? "..." : "Refresh"}
+            </Button>
+            <Link
+              href="/templates"
+              target="_blank"
+              className="text-sm text-primary hover:text-primary hover:underline font-medium"
+            >
+              Manage Templates
+            </Link>
           </div>
-
-          {/* Missing Required Warning */}
-          {getMissingRequired().length > 0 && (
-            <div className="bg-yellow-50 border border-yellow-200 rounded px-3 py-2 mb-4">
-              <p className="text-sm text-yellow-700">
-                Missing required: {getMissingRequired().join(", ")}
-              </p>
-            </div>
-          )}
-
-          {/* Prompt Preview */}
-          <details className="bg-gray-50 rounded-lg p-4">
-            <summary className="text-xs text-gray-500 cursor-pointer select-none">
-              Prompt Preview ({selectedIds.size} template{selectedIds.size !== 1 ? "s" : ""})
-            </summary>
-            <div className="mt-3 space-y-3">
-              {templates
-                .filter(t => selectedIds.has(t.id))
-                .map(tmpl => {
-                  let prompt = tmpl.promptText
-                  for (const variable of tmpl.variables) {
-                    const value = variableValues[variable.name] || ""
-                    prompt = prompt.replace(new RegExp(`\\{\\{${variable.name}\\}\\}`, "g"), value)
-                  }
-                  return (
-                    <div key={tmpl.id}>
-                      <p className="text-xs font-medium text-gray-600 mb-1">{tmpl.name}:</p>
-                      <p className="text-sm text-gray-800 whitespace-pre-wrap bg-white rounded p-2 border">
-                        {prompt || <span className="text-gray-400 italic">Fill in variables to see preview</span>}
-                      </p>
-                    </div>
-                  )
-                })}
-            </div>
-          </details>
         </div>
-      )}
-    </div>
+
+        {/* Template Card Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+          {templates.map((template) => {
+            const isSelected = selectedIds.has(template.id)
+            return (
+              <div
+                key={template.id}
+                onClick={() => toggleTemplate(template.id)}
+                className={`border-2 rounded-lg p-4 cursor-pointer transition ${
+                  isSelected
+                    ? "border-primary bg-primary/10"
+                    : "border-border hover:border-input"
+                }`}
+              >
+                <div className="flex items-start justify-between mb-2">
+                  <h3 className="font-semibold text-foreground">{template.name}</h3>
+                  <input
+                    type={mode === "multi" ? "checkbox" : "radio"}
+                    checked={isSelected}
+                    onChange={() => {}}
+                    name="template-selector"
+                    className="mt-1 flex-shrink-0"
+                  />
+                </div>
+                {template.description && (
+                  <p className="text-sm text-muted-foreground line-clamp-2 mb-2">{template.description}</p>
+                )}
+                <div className="flex items-center gap-2">
+                  {template.variables.length > 0 && (
+                    <span className="text-xs text-muted-foreground">
+                      {template.variables.length} variable{template.variables.length !== 1 ? "s" : ""}
+                    </span>
+                  )}
+                  <Badge variant={
+                    template.category === "image"
+                      ? "default"
+                      : template.category === "video"
+                      ? "secondary"
+                      : "outline"
+                  } className={`text-xs ${
+                    template.category === "image"
+                      ? "bg-primary/20 text-primary"
+                      : template.category === "video"
+                      ? "bg-violet-500/20 text-violet-400"
+                      : "bg-success/20 text-success"
+                  }`}>
+                    {template.category}
+                  </Badge>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+
+        {/* Variable Inputs — shown when templates are selected and have non-AUTO variables */}
+        {hasVariables && uniqueVariables.some(v => v.type !== "AUTO") && (
+          <div className="border-t border-border pt-4 mt-2">
+            <h3 className="text-sm font-medium text-muted-foreground mb-3">
+              Fill in Variables
+            </h3>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              {uniqueVariables.map((variable) => (
+                <div key={variable.name}>
+                  <Label className="block text-sm text-muted-foreground mb-1">
+                    {variable.displayName}
+                    {variable.isRequired && <span className="text-destructive ml-1">*</span>}
+                    {variable.type === "AUTO" && (
+                      <span className="text-cyan-400 ml-1 text-xs">(auto-filled)</span>
+                    )}
+                  </Label>
+
+                  {variable.type === "DROPDOWN" && variable.options.length > 0 ? (
+                    <select
+                      value={variableValues[variable.name] || ""}
+                      onChange={(e) => setVariableValues(prev => ({
+                        ...prev,
+                        [variable.name]: e.target.value
+                      }))}
+                      className="w-full bg-background border border-input rounded px-3 py-2 text-sm text-foreground focus:ring-2 focus:ring-ring focus:border-ring"
+                    >
+                      <option value="">Select {variable.displayName.toLowerCase()}...</option>
+                      {variable.options.map((opt) => (
+                        <option key={opt} value={opt}>{opt}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <Input
+                      type="text"
+                      value={variableValues[variable.name] || ""}
+                      onChange={(e) => setVariableValues(prev => ({
+                        ...prev,
+                        [variable.name]: e.target.value
+                      }))}
+                      placeholder={variable.defaultValue || `Enter ${variable.displayName.toLowerCase()}`}
+                      disabled={variable.type === "AUTO"}
+                      className={variable.type === "AUTO" ? "bg-card text-muted-foreground" : "text-foreground"}
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Missing Required Warning */}
+            {getMissingRequired().length > 0 && (
+              <div className="bg-warning/10 border border-warning/30 rounded px-3 py-2 mb-4">
+                <p className="text-sm text-warning">
+                  Missing required: {getMissingRequired().join(", ")}
+                </p>
+              </div>
+            )}
+
+            {/* Prompt Preview */}
+            <details className="bg-background rounded-lg p-4">
+              <summary className="text-xs text-muted-foreground cursor-pointer select-none">
+                Prompt Preview ({selectedIds.size} template{selectedIds.size !== 1 ? "s" : ""})
+              </summary>
+              <div className="mt-3 space-y-3">
+                {templates
+                  .filter(t => selectedIds.has(t.id))
+                  .map(tmpl => {
+                    let prompt = tmpl.promptText
+                    for (const variable of tmpl.variables) {
+                      const value = variableValues[variable.name] || ""
+                      prompt = prompt.replace(new RegExp(`\\{\\{${variable.name}\\}\\}`, "g"), value)
+                    }
+                    return (
+                      <div key={tmpl.id}>
+                        <p className="text-xs font-medium text-muted-foreground mb-1">{tmpl.name}:</p>
+                        <p className="text-sm text-foreground whitespace-pre-wrap bg-secondary/30 rounded p-2 border border-border">
+                          {prompt || <span className="text-muted-foreground italic">Fill in variables to see preview</span>}
+                        </p>
+                      </div>
+                    )
+                  })}
+              </div>
+            </details>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   )
 }

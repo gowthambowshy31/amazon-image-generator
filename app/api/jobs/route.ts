@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { requireAuth } from "@/lib/auth-helpers"
 
 // GET /api/jobs - List generation jobs with pagination
 export async function GET(request: NextRequest) {
   try {
+    const authResult = await requireAuth()
+    if (authResult.error) return authResult.error
+    const { user } = authResult
+
     const { searchParams } = new URL(request.url)
     const status = searchParams.get("status")
     const page = Math.max(1, parseInt(searchParams.get("page") || "1"))

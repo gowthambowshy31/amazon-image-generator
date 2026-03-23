@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { requireAuth } from "@/lib/auth-helpers"
 import { z } from "zod"
 
 const createVideoTypeSchema = z.object({
@@ -12,6 +13,10 @@ const createVideoTypeSchema = z.object({
 // GET /api/video-types - List all video types
 export async function GET(request: NextRequest) {
   try {
+    const authResult = await requireAuth()
+    if (authResult.error) return authResult.error
+    const { user } = authResult
+
     const videoTypes = await prisma.videoType.findMany({
       orderBy: {
         order: 'asc'
@@ -39,6 +44,10 @@ export async function GET(request: NextRequest) {
 // POST /api/video-types - Create a new video type
 export async function POST(request: NextRequest) {
   try {
+    const authResult = await requireAuth()
+    if (authResult.error) return authResult.error
+    const { user } = authResult
+
     const body = await request.json()
     const validated = createVideoTypeSchema.parse(body)
 
@@ -57,23 +66,18 @@ export async function POST(request: NextRequest) {
       }
     })
 
-    // Log activity with default admin user
-    const adminUser = await prisma.user.findFirst({
-      where: { role: 'ADMIN' }
-    })
-    if (adminUser) {
-      await prisma.activityLog.create({
-        data: {
-          userId: adminUser.id,
-          action: "CREATE_VIDEO_TYPE",
-          entityType: "VideoType",
-          entityId: videoType.id,
-          metadata: {
-            name: videoType.name
-          }
+    // Log activity
+    await prisma.activityLog.create({
+      data: {
+        userId: user.id,
+        action: "CREATE_VIDEO_TYPE",
+        entityType: "VideoType",
+        entityId: videoType.id,
+        metadata: {
+          name: videoType.name
         }
-      })
-    }
+      }
+    })
 
     return NextResponse.json(videoType, { status: 201 })
   } catch (error) {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { requireAuth } from "@/lib/auth-helpers"
 import { z } from "zod"
 
 const updateProductSchema = z.object({
@@ -17,6 +18,10 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const authResult = await requireAuth()
+    if (authResult.error) return authResult.error
+    const { user } = authResult
+
     const { id } = await params
     const product = await prisma.product.findUnique({
       where: { id },
@@ -105,6 +110,10 @@ export async function GET(
       return NextResponse.json({ error: "Product not found" }, { status: 404 })
     }
 
+    if (user.organizationId && product.organizationId !== user.organizationId) {
+      return NextResponse.json({ error: "Product not found" }, { status: 404 })
+    }
+
     return NextResponse.json(product)
   } catch (error) {
     console.error("Error fetching product:", error)
@@ -121,7 +130,21 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const authResult = await requireAuth()
+    if (authResult.error) return authResult.error
+    const { user } = authResult
+
     const { id } = await params
+
+    // Verify org ownership before updating
+    const existing = await prisma.product.findUnique({ where: { id } })
+    if (!existing) {
+      return NextResponse.json({ error: "Product not found" }, { status: 404 })
+    }
+    if (user.organizationId && existing.organizationId !== user.organizationId) {
+      return NextResponse.json({ error: "Product not found" }, { status: 404 })
+    }
+
     const body = await request.json()
     const validated = updateProductSchema.parse(body)
 
@@ -140,20 +163,15 @@ export async function PATCH(
     })
 
     // Log activity
-    const adminUser = await prisma.user.findFirst({
-      where: { role: 'ADMIN' }
+    await prisma.activityLog.create({
+      data: {
+        userId: user.id,
+        action: "UPDATE_PRODUCT",
+        entityType: "Product",
+        entityId: product.id,
+        metadata: validated
+      }
     })
-    if (adminUser) {
-      await prisma.activityLog.create({
-        data: {
-          userId: adminUser.id,
-          action: "UPDATE_PRODUCT",
-          entityType: "Product",
-          entityId: product.id,
-          metadata: validated
-        }
-      })
-    }
 
     return NextResponse.json(product)
   } catch (error) {
@@ -178,26 +196,34 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const authResult = await requireAuth()
+    if (authResult.error) return authResult.error
+    const { user } = authResult
+
     const { id } = await params
+
+    // Verify org ownership before deleting
+    const existing = await prisma.product.findUnique({ where: { id } })
+    if (!existing) {
+      return NextResponse.json({ error: "Product not found" }, { status: 404 })
+    }
+    if (user.organizationId && existing.organizationId !== user.organizationId) {
+      return NextResponse.json({ error: "Product not found" }, { status: 404 })
+    }
 
     await prisma.product.delete({
       where: { id }
     })
 
     // Log activity
-    const adminUser = await prisma.user.findFirst({
-      where: { role: 'ADMIN' }
+    await prisma.activityLog.create({
+      data: {
+        userId: user.id,
+        action: "DELETE_PRODUCT",
+        entityType: "Product",
+        entityId: id
+      }
     })
-    if (adminUser) {
-      await prisma.activityLog.create({
-        data: {
-          userId: adminUser.id,
-          action: "DELETE_PRODUCT",
-          entityType: "Product",
-          entityId: id
-        }
-      })
-    }
 
     return NextResponse.json({ success: true })
   } catch (error) {

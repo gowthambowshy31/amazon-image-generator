@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { getAmazonSPClient } from "@/lib/amazon-sp"
 import { getPublicS3Url } from "@/lib/s3"
+import { requireAuth } from "@/lib/auth-helpers"
 
 /**
  * GET /api/amazon/diagnose?productId=xxx
@@ -10,6 +11,10 @@ import { getPublicS3Url } from "@/lib/s3"
  */
 export async function GET(request: NextRequest) {
   try {
+    const authResult = await requireAuth()
+    if (authResult.error) return authResult.error
+    const { user } = authResult
+
     const productId = request.nextUrl.searchParams.get('productId')
     const asin = request.nextUrl.searchParams.get('asin')
 

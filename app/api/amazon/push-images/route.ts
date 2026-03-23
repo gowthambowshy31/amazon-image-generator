@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma"
 import { getAmazonSPClient, ImageSlotMapping } from "@/lib/amazon-sp"
 import { getPublicS3Url } from "@/lib/s3"
 import { downloadAndStoreImage } from "@/lib/image-storage"
+import { requireAuth } from "@/lib/auth-helpers"
 import { z } from "zod"
 
 const pushImagesSchema = z.object({
@@ -19,6 +20,10 @@ const pushImagesSchema = z.object({
  */
 export async function POST(request: NextRequest) {
   try {
+    const authResult = await requireAuth()
+    if (authResult.error) return authResult.error
+    const { user } = authResult
+
     const body = await request.json()
     const { productId, images } = pushImagesSchema.parse(body)
 
@@ -189,29 +194,26 @@ export async function POST(request: NextRequest) {
     ))
 
     // Log activity
-    const adminUser = await prisma.user.findFirst({ where: { role: 'ADMIN' } })
-    if (adminUser) {
-      await prisma.activityLog.create({
-        data: {
-          userId: adminUser.id,
-          action: result.success ? "AMAZON_PUSH_SUCCESS" : "AMAZON_PUSH_FAILED",
-          entityType: "Product",
-          entityId: productId,
-          metadata: {
-            asin: product.asin,
-            sku,
-            imageCount: images.length,
-            slots: images.map(i => i.amazonSlot),
-            result: {
-              success: result.success,
-              status: result.status,
-              error: result.error,
-              issues: result.issues
-            }
+    await prisma.activityLog.create({
+      data: {
+        userId: user.id,
+        action: result.success ? "AMAZON_PUSH_SUCCESS" : "AMAZON_PUSH_FAILED",
+        entityType: "Product",
+        entityId: productId,
+        metadata: {
+          asin: product.asin,
+          sku,
+          imageCount: images.length,
+          slots: images.map(i => i.amazonSlot),
+          result: {
+            success: result.success,
+            status: result.status,
+            error: result.error,
+            issues: result.issues
           }
         }
-      })
-    }
+      }
+    })
 
     // If push was successful, refresh source images from Amazon
     // Note: Amazon may take a few minutes to process, so images might not show immediately

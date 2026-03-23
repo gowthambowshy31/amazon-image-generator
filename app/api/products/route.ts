@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { requireAuth } from "@/lib/auth-helpers"
 import { z } from "zod"
 
 const createProductSchema = z.object({
@@ -14,12 +15,18 @@ const createProductSchema = z.object({
 // GET /api/products - List all products
 export async function GET(request: NextRequest) {
   try {
+    const authResult = await requireAuth()
+    if (authResult.error) return authResult.error
+    const { user } = authResult
+
     const { searchParams } = new URL(request.url)
     const status = searchParams.get("status")
     const category = searchParams.get("category")
     const search = searchParams.get("search")
 
-    const where: any = {}
+    const where: any = {
+      ...(user.organizationId ? { organizationId: user.organizationId } : {})
+    }
 
     if (status) {
       where.status = status
@@ -100,18 +107,18 @@ export async function GET(request: NextRequest) {
 // POST /api/products - Create a new product
 export async function POST(request: NextRequest) {
   try {
+    const authResult = await requireAuth()
+    if (authResult.error) return authResult.error
+    const { user } = authResult
+
     const body = await request.json()
     const validated = createProductSchema.parse(body)
-
-    // Get default admin user
-    const adminUser = await prisma.user.findFirst({
-      where: { role: 'ADMIN' }
-    })
 
     const product = await prisma.product.create({
       data: {
         ...validated,
-        createdById: adminUser?.id || 'system'
+        createdById: user.id,
+        organizationId: user.organizationId
       },
       include: {
         createdBy: {
@@ -125,20 +132,18 @@ export async function POST(request: NextRequest) {
     })
 
     // Log activity
-    if (adminUser) {
-      await prisma.activityLog.create({
-        data: {
-          userId: adminUser.id,
-          action: "CREATE_PRODUCT",
-          entityType: "Product",
-          entityId: product.id,
-          metadata: {
-            title: product.title,
-            asin: product.asin
-          }
+    await prisma.activityLog.create({
+      data: {
+        userId: user.id,
+        action: "CREATE_PRODUCT",
+        entityType: "Product",
+        entityId: product.id,
+        metadata: {
+          title: product.title,
+          asin: product.asin
         }
-      })
-    }
+      }
+    })
 
     return NextResponse.json(product, { status: 201 })
   } catch (error) {

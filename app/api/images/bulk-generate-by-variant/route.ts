@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { requireAuth } from "@/lib/auth-helpers"
 import { generateImage } from "@/lib/gemini"
 import { uploadToS3 } from "@/lib/s3"
 import { z } from "zod"
@@ -36,13 +37,12 @@ const bulkGenerateSchema = z.object({
 // POST /api/images/bulk-generate-by-variant
 export async function POST(request: NextRequest) {
   try {
+    const authResult = await requireAuth()
+    if (authResult.error) return authResult.error
+    const { user } = authResult
+
     const body = await request.json()
     const validated = bulkGenerateSchema.parse(body)
-
-    // Get admin user for logging
-    const adminUser = await prisma.user.findFirst({
-      where: { role: "ADMIN" }
-    })
 
     // Resolve prompt source: template flow vs legacy imageType flow
     let imageType: any = null
@@ -110,25 +110,23 @@ export async function POST(request: NextRequest) {
     })
 
     // Log activity
-    if (adminUser) {
-      await prisma.activityLog.create({
-        data: {
-          userId: adminUser.id,
-          action: "CREATE_BULK_JOB",
-          entityType: "GenerationJob",
-          entityId: job.id,
-          metadata: {
-            variant: validated.variant,
-            productCount: eligibleProducts.length,
-            imageType: displayName,
-            templateId: template?.id || null
-          }
+    await prisma.activityLog.create({
+      data: {
+        userId: user.id,
+        action: "CREATE_BULK_JOB",
+        entityType: "GenerationJob",
+        entityId: job.id,
+        metadata: {
+          variant: validated.variant,
+          productCount: eligibleProducts.length,
+          imageType: displayName,
+          templateId: template?.id || null
         }
-      })
-    }
+      }
+    })
 
     // Process in background (don't await - return job immediately)
-    processJob(job.id, eligibleProducts, displayName, basePrompt, validated, adminUser?.id).catch(err => {
+    processJob(job.id, eligibleProducts, displayName, basePrompt, validated, user.id).catch(err => {
       console.error("Bulk generation job failed:", err)
     })
 
@@ -160,7 +158,7 @@ async function processJob(
   displayName: string,
   basePrompt: string,
   validated: z.infer<typeof bulkGenerateSchema>,
-  adminUserId?: string
+  adminUserId: string
 ) {
   let completedCount = 0
   let failedCount = 0
@@ -255,7 +253,7 @@ async function processJob(
             variant: validated.variant,
             sourceImageId: sourceImage.id
           },
-          generatedById: adminUserId || "system"
+          generatedById: adminUserId
         }
       })
 

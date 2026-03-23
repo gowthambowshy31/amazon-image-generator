@@ -1,6 +1,9 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import DashboardLayout from "@/app/components/DashboardLayout"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
 interface DatabaseStatus {
   initialized: boolean
@@ -76,107 +79,113 @@ export default function AdminSetupPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-        <div className="text-white text-xl">Loading...</div>
-      </div>
+      <DashboardLayout>
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="text-foreground text-xl">Loading...</div>
+        </div>
+      </DashboardLayout>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-900 p-8">
-      <div className="max-w-2xl mx-auto">
-        <h1 className="text-3xl font-bold text-white mb-8">Admin Setup</h1>
+    <DashboardLayout>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-2"><h1 className="text-2xl font-bold text-foreground">Admin Setup</h1></div>
+
+      <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
         {message && (
           <div className={`p-4 rounded-lg mb-6 ${
-            message.type === "success" ? "bg-green-900 text-green-200" : "bg-red-900 text-red-200"
+            message.type === "success" ? "bg-success/10 border border-success/30 text-success" : "bg-destructive/10 border border-destructive/30 text-destructive"
           }`}>
             {message.text}
           </div>
         )}
 
-        <div className="bg-gray-800 rounded-lg p-6 mb-6">
-          <h2 className="text-xl font-semibold text-white mb-4">Database Status</h2>
-          {status ? (
-            <div className="space-y-2 text-gray-300">
-              <p>
-                Status:{" "}
-                <span className={status.initialized ? "text-green-400" : "text-yellow-400"}>
-                  {status.initialized ? "Initialized" : "Not Initialized"}
-                </span>
-              </p>
-              <p>Users: {status.counts.users}</p>
-              <p>Products: {status.counts.products}</p>
-              <p>Image Types: {status.counts.imageTypes}</p>
-            </div>
-          ) : (
-            <p className="text-red-400">Could not fetch status</p>
-          )}
-        </div>
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>Database Status</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {status ? (
+              <div className="space-y-2 text-muted-foreground">
+                <p>
+                  Status:{" "}
+                  <span className={status.initialized ? "text-success" : "text-warning"}>
+                    {status.initialized ? "Initialized" : "Not Initialized"}
+                  </span>
+                </p>
+                <p>Users: {status.counts.users}</p>
+                <p>Products: {status.counts.products}</p>
+                <p>Image Types: {status.counts.imageTypes}</p>
+              </div>
+            ) : (
+              <p className="text-destructive">Could not fetch status</p>
+            )}
+          </CardContent>
+        </Card>
 
         <div className="space-y-4">
-          <div className="bg-gray-800 rounded-lg p-6">
-            <h3 className="text-lg font-medium text-white mb-2">1. Initialize Database</h3>
-            <p className="text-gray-400 text-sm mb-4">
-              Creates admin user (admin@example.com / admin123) and default image/video types.
-            </p>
-            <button
-              onClick={initializeDatabase}
-              disabled={actionLoading !== null || status?.initialized}
-              className={`px-4 py-2 rounded-lg font-medium ${
-                status?.initialized
-                  ? "bg-gray-600 text-gray-400 cursor-not-allowed"
-                  : "bg-blue-600 hover:bg-blue-700 text-white"
-              } ${actionLoading === "init" ? "opacity-50" : ""}`}
-            >
-              {actionLoading === "init" ? "Initializing..." : status?.initialized ? "Already Initialized" : "Initialize Database"}
-            </button>
-          </div>
+          <Card>
+            <CardContent className="p-6">
+              <h3 className="text-lg font-medium text-foreground mb-2">1. Initialize Database</h3>
+              <p className="text-muted-foreground text-sm mb-4">
+                Creates admin user (admin@example.com / admin123) and default image/video types.
+              </p>
+              <Button
+                onClick={initializeDatabase}
+                disabled={actionLoading !== null || status?.initialized}
+                variant={status?.initialized ? "secondary" : "default"}
+                className={actionLoading === "init" ? "opacity-50" : ""}
+              >
+                {actionLoading === "init" ? "Initializing..." : status?.initialized ? "Already Initialized" : "Initialize Database"}
+              </Button>
+            </CardContent>
+          </Card>
 
-          <div className="bg-gray-800 rounded-lg p-6">
-            <h3 className="text-lg font-medium text-white mb-2">2. Import Amazon Products</h3>
-            <p className="text-gray-400 text-sm mb-4">
-              Fetches your FBA inventory from Amazon and imports products with their images.
-              This may take several minutes for large inventories.
-            </p>
-            <button
-              onClick={importAmazonProducts}
-              disabled={actionLoading !== null || !status?.initialized}
-              className={`px-4 py-2 rounded-lg font-medium ${
-                !status?.initialized
-                  ? "bg-gray-600 text-gray-400 cursor-not-allowed"
-                  : "bg-green-600 hover:bg-green-700 text-white"
-              } ${actionLoading === "import" ? "opacity-50" : ""}`}
-            >
-              {actionLoading === "import" ? "Importing... (this may take a while)" : "Import Amazon Products"}
-            </button>
-          </div>
+          <Card>
+            <CardContent className="p-6">
+              <h3 className="text-lg font-medium text-foreground mb-2">2. Import Amazon Products</h3>
+              <p className="text-muted-foreground text-sm mb-4">
+                Fetches your FBA inventory from Amazon and imports products with their images.
+                This may take several minutes for large inventories.
+              </p>
+              <Button
+                onClick={importAmazonProducts}
+                disabled={actionLoading !== null || !status?.initialized}
+                variant={!status?.initialized ? "secondary" : "default"}
+                className={`${!status?.initialized ? "" : "bg-success hover:bg-success/90"} ${actionLoading === "import" ? "opacity-50" : ""}`}
+              >
+                {actionLoading === "import" ? "Importing... (this may take a while)" : "Import Amazon Products"}
+              </Button>
+            </CardContent>
+          </Card>
 
-          <div className="bg-gray-800 rounded-lg p-6">
-            <h3 className="text-lg font-medium text-white mb-2">3. Go to Dashboard</h3>
-            <p className="text-gray-400 text-sm mb-4">
-              Once setup is complete, go to the main dashboard to start generating images.
-            </p>
-            <a
-              href="/dashboard"
-              className="inline-block px-4 py-2 rounded-lg font-medium bg-purple-600 hover:bg-purple-700 text-white"
-            >
-              Go to Dashboard
-            </a>
-          </div>
+          <Card>
+            <CardContent className="p-6">
+              <h3 className="text-lg font-medium text-foreground mb-2">3. Go to Dashboard</h3>
+              <p className="text-muted-foreground text-sm mb-4">
+                Once setup is complete, go to the main dashboard to start generating images.
+              </p>
+              <Button asChild>
+                <a href="/dashboard">Go to Dashboard</a>
+              </Button>
+            </CardContent>
+          </Card>
         </div>
 
-        <div className="mt-8 p-4 bg-gray-800 rounded-lg">
-          <h3 className="text-lg font-medium text-white mb-2">Login Credentials</h3>
-          <p className="text-gray-400 text-sm">
-            After initialization, use these credentials to login:
-          </p>
-          <div className="mt-2 font-mono text-sm text-gray-300">
-            <p>Email: admin@example.com</p>
-            <p>Password: admin123</p>
-          </div>
-        </div>
+        <Card className="mt-8">
+          <CardContent className="p-4">
+            <h3 className="text-lg font-medium text-foreground mb-2">Login Credentials</h3>
+            <p className="text-muted-foreground text-sm">
+              After initialization, use these credentials to login:
+            </p>
+            <div className="mt-2 font-mono text-sm text-muted-foreground">
+              <p>Email: admin@example.com</p>
+              <p>Password: admin123</p>
+            </div>
+          </CardContent>
+        </Card>
       </div>
-    </div>
+    </DashboardLayout>
   )
 }

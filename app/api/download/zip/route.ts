@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { requireAuth } from "@/lib/auth-helpers"
 import archiver from "archiver"
 import { PassThrough } from "stream"
 import fs from "fs/promises"
@@ -29,6 +30,10 @@ async function fetchImageAsBuffer(img: ImageData): Promise<Buffer> {
 
 export async function POST(request: NextRequest) {
   try {
+    const authResult = await requireAuth()
+    if (authResult.error) return authResult.error
+    const { user } = authResult
+
     const body = await request.json()
     const { productId, imageType, productIds } = body
 

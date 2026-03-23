@@ -1,12 +1,13 @@
 // @ts-ignore - amazon-sp-api types are not fully compatible
 import SellingPartnerAPI from "amazon-sp-api"
 
-interface AmazonCredentials {
+export interface AmazonCredentials {
   region: string
   refresh_token: string
   client_id: string
   client_secret: string
   marketplace_id: string
+  seller_id?: string
 }
 
 interface AmazonProductImage {
@@ -48,6 +49,8 @@ export interface UpdateListingImagesResult {
 
 export class AmazonSPService {
   private client: any
+  private marketplaceId: string
+  private sellerId: string
 
   constructor(credentials?: AmazonCredentials) {
     const creds = credentials || {
@@ -55,8 +58,11 @@ export class AmazonSPService {
       refresh_token: process.env.AMAZON_REFRESH_TOKEN || "",
       client_id: process.env.AMAZON_CLIENT_ID || "",
       client_secret: process.env.AMAZON_CLIENT_SECRET || "",
-      marketplace_id: process.env.AMAZON_MARKETPLACE_ID || "ATVPDKIKX0DER"
+      marketplace_id: this.marketplaceId
     }
+
+    this.marketplaceId = creds.marketplace_id
+    this.sellerId = creds.seller_id || process.env.AMAZON_SELLER_ID || ""
 
     // @ts-ignore - constructor type issue
     this.client = new SellingPartnerAPI({
@@ -85,7 +91,7 @@ export class AmazonSPService {
           asin: asin
         },
         query: {
-          marketplaceIds: process.env.AMAZON_MARKETPLACE_ID || "ATVPDKIKX0DER",
+          marketplaceIds: this.marketplaceId,
           includedData: "images,attributes,productTypes,summaries"
         }
       })
@@ -158,7 +164,7 @@ export class AmazonSPService {
         operation: "searchCatalogItems",
         endpoint: "catalogItems",
         query: {
-          marketplaceIds: process.env.AMAZON_MARKETPLACE_ID || "ATVPDKIKX0DER",
+          marketplaceIds: this.marketplaceId,
           keywords: keywords,
           includedData: "images,summaries",
           pageSize: limit
@@ -219,9 +225,9 @@ export class AmazonSPService {
 
       do {
         const queryParams: any = {
-          marketplaceIds: process.env.AMAZON_MARKETPLACE_ID || "ATVPDKIKX0DER",
+          marketplaceIds: this.marketplaceId,
           granularityType: "Marketplace",
-          granularityId: process.env.AMAZON_MARKETPLACE_ID || "ATVPDKIKX0DER"
+          granularityId: this.marketplaceId
         }
 
         if (nextToken) {
@@ -264,9 +270,9 @@ export class AmazonSPService {
 
       do {
         const queryParams: any = {
-          marketplaceIds: process.env.AMAZON_MARKETPLACE_ID || "ATVPDKIKX0DER",
+          marketplaceIds: this.marketplaceId,
           granularityType: "Marketplace",
-          granularityId: process.env.AMAZON_MARKETPLACE_ID || "ATVPDKIKX0DER"
+          granularityId: this.marketplaceId
         }
 
         if (nextToken) {
@@ -313,7 +319,7 @@ export class AmazonSPService {
    */
   async getSellerSKUByASIN(asin: string): Promise<string | null> {
     try {
-      const marketplaceId = process.env.AMAZON_MARKETPLACE_ID || "ATVPDKIKX0DER"
+      const marketplaceId = this.marketplaceId
       let nextToken: string | undefined = undefined
 
       do {
@@ -363,8 +369,8 @@ export class AmazonSPService {
   async updateListingImages(params: UpdateListingImagesParams): Promise<UpdateListingImagesResult> {
     try {
       const { sku, images, productType } = params
-      const sellerId = process.env.AMAZON_SELLER_ID
-      const marketplaceId = process.env.AMAZON_MARKETPLACE_ID || "ATVPDKIKX0DER"
+      const sellerId = this.sellerId
+      const marketplaceId = this.marketplaceId
 
       if (!sellerId) {
         return {
@@ -463,8 +469,8 @@ export class AmazonSPService {
    */
   async getListingItem(sku: string): Promise<any> {
     try {
-      const sellerId = process.env.AMAZON_SELLER_ID
-      const marketplaceId = process.env.AMAZON_MARKETPLACE_ID || "ATVPDKIKX0DER"
+      const sellerId = this.sellerId
+      const marketplaceId = this.marketplaceId
 
       if (!sellerId) {
         throw new Error('AMAZON_SELLER_ID environment variable is not configured')
@@ -491,7 +497,7 @@ export class AmazonSPService {
   }
 }
 
-// Singleton instance
+// Singleton instance (used as fallback when env vars are configured)
 let amazonSPInstance: AmazonSPService | null = null
 
 export function getAmazonSPClient(): AmazonSPService {
@@ -499,4 +505,44 @@ export function getAmazonSPClient(): AmazonSPService {
     amazonSPInstance = new AmazonSPService()
   }
   return amazonSPInstance
+}
+
+/**
+ * Create an AmazonSPService instance using per-org credentials from the database.
+ * Falls back to env vars if no org connection is found.
+ */
+export async function getAmazonSPClientForOrg(organizationId: string | null): Promise<AmazonSPService> {
+  if (!organizationId) {
+    return getAmazonSPClient()
+  }
+
+  // Dynamic import to avoid circular dependencies
+  const { prisma } = await import("@/lib/prisma")
+  const { decrypt } = await import("@/lib/encryption")
+
+  const connection = await prisma.amazonConnection.findFirst({
+    where: { organizationId, isActive: true },
+  })
+
+  if (!connection) {
+    // Fall back to env vars
+    return getAmazonSPClient()
+  }
+
+  let refreshToken: string
+  try {
+    refreshToken = decrypt(connection.refreshToken)
+  } catch {
+    // If decryption fails, the token might be stored in plain text (migration period)
+    refreshToken = connection.refreshToken
+  }
+
+  return new AmazonSPService({
+    region: connection.region || "na",
+    refresh_token: refreshToken,
+    client_id: process.env.AMAZON_CLIENT_ID || "",
+    client_secret: process.env.AMAZON_CLIENT_SECRET || "",
+    marketplace_id: connection.marketplaceId || "ATVPDKIKX0DER",
+    seller_id: connection.sellerId,
+  })
 }

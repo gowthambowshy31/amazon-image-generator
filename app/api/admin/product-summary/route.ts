@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { getAmazonSPClient } from "@/lib/amazon-sp"
+import { requireAuth } from "@/lib/auth-helpers"
 
 /**
  * GET /api/admin/product-summary
  * Returns a summary of products, inventory, and images
  */
 export async function GET(request: NextRequest) {
+  const authResult = await requireAuth()
+  if (authResult.error) return authResult.error
+
   try {
     const amazonSP = getAmazonSPClient()
 

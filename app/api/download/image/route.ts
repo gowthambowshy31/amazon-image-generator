@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
+import { requireAuth } from "@/lib/auth-helpers"
 
 export async function GET(request: NextRequest) {
   try {
+    const authResult = await requireAuth()
+    if (authResult.error) return authResult.error
+    const { user } = authResult
+
     const url = request.nextUrl.searchParams.get('url')
     const filename = request.nextUrl.searchParams.get('filename') || 'image.jpg'
 

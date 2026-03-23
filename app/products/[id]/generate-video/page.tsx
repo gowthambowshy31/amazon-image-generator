@@ -5,6 +5,12 @@ import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import ImageSelector from '@/app/components/ImageSelector'
 import TemplateSelector, { TemplateSelection } from '@/app/components/TemplateSelector'
+import DashboardLayout from '@/app/components/DashboardLayout'
+import { Button } from "@/components/ui/button"
+import { Textarea } from "@/components/ui/textarea"
+import { Label } from "@/components/ui/label"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
 
 interface Product {
   id: string
@@ -206,58 +212,55 @@ export default function GenerateVideoPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
+      <DashboardLayout>
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-violet-400 mx-auto"></div>
+            <p className="mt-4 text-muted-foreground">Loading...</p>
+          </div>
         </div>
-      </div>
+      </DashboardLayout>
     )
   }
 
   if (!product) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold text-red-600 mb-4">Product not found</h2>
-          <Link href="/dashboard" className="text-blue-600 hover:underline">
-            Back to Dashboard
-          </Link>
+      <DashboardLayout>
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="text-center">
+            <h2 className="text-2xl font-bold text-destructive mb-4">Product not found</h2>
+            <Link href="/dashboard" className="text-primary hover:underline">
+              Back to Dashboard
+            </Link>
+          </div>
         </div>
-      </div>
+      </DashboardLayout>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex justify-between items-center">
-            <div className="flex items-center gap-4">
-              <Link href={`/products/${product.id}`} className="text-gray-600 hover:text-gray-900">
-                ← Back
-              </Link>
-              <h1 className="text-2xl font-bold text-gray-900">Generate Video</h1>
-            </div>
-            <Link
-              href={`/products/${product.id}/generate`}
-              className="px-4 py-2 bg-gradient-to-r from-green-500 to-blue-600 text-white rounded-lg hover:from-green-600 hover:to-blue-700 font-semibold shadow-lg"
-            >
-              📸 Generate Images
+    <DashboardLayout>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-2">
+        <div className="flex justify-between items-center">
+          <h1 className="text-2xl font-bold text-foreground">Generate Video</h1>
+          <Button asChild className="bg-gradient-to-r from-emerald-600 to-primary hover:from-emerald-500 hover:to-primary/90 font-semibold">
+            <Link href={`/products/${product.id}/generate`}>
+              Generate Images
             </Link>
-          </div>
+          </Button>
         </div>
-      </header>
+      </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Product Info */}
-        <div className="bg-white rounded-lg shadow p-6 mb-6">
-          <h2 className="text-xl font-bold text-gray-900 mb-2">{product.title}</h2>
-          <p className="text-sm text-gray-500">
-            ASIN: {product.asin} | {product.sourceImages?.length || 0} source images | {product.images?.filter(i => i.status === 'COMPLETED').length || 0} generated images
-          </p>
-        </div>
+        <Card className="mb-6">
+          <CardContent className="p-6">
+            <h2 className="text-xl font-bold text-foreground mb-2">{product.title}</h2>
+            <p className="text-sm text-muted-foreground">
+              ASIN: {product.asin} | {product.sourceImages?.length || 0} source images | {product.images?.filter(i => i.status === 'COMPLETED').length || 0} generated images
+            </p>
+          </CardContent>
+        </Card>
 
         {/* Amazon Source Image Selection */}
         {product.sourceImages && product.sourceImages.length > 0 && (
@@ -328,86 +331,91 @@ export default function GenerateVideoPage() {
         )}
 
         {/* Custom Prompt */}
-        <div className="bg-white rounded-lg shadow p-6 mb-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">
-            {templatePrompt ? "Additional Instructions (Optional)" : "Custom Instructions (Optional)"}
-          </h2>
-          <p className="text-sm text-gray-600 mb-4">
-            {templatePrompt
-              ? "Add any additional instructions to combine with the template prompt above."
-              : "Add specific instructions to customize the video (e.g., \"add slow motion\", \"bright lighting\", \"zoom in effect\"). This will be combined with the template's default prompt."
-            }
-          </p>
-          <textarea
-            value={customPrompt}
-            onChange={(e) => setCustomPrompt(e.target.value)}
-            placeholder={templatePrompt ? "Additional instructions (optional)..." : "Enter custom instructions here..."}
-            className="w-full border border-gray-300 rounded-lg p-3 min-h-[100px] text-gray-900 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-          />
-        </div>
+        <Card className="mb-6">
+          <CardContent className="p-6">
+            <h2 className="text-lg font-semibold text-foreground mb-4">
+              {templatePrompt ? "Additional Instructions (Optional)" : "Custom Instructions (Optional)"}
+            </h2>
+            <p className="text-sm text-muted-foreground mb-4">
+              {templatePrompt
+                ? "Add any additional instructions to combine with the template prompt above."
+                : "Add specific instructions to customize the video (e.g., \"add slow motion\", \"bright lighting\", \"zoom in effect\"). This will be combined with the template's default prompt."
+              }
+            </p>
+            <Textarea
+              value={customPrompt}
+              onChange={(e) => setCustomPrompt(e.target.value)}
+              placeholder={templatePrompt ? "Additional instructions (optional)..." : "Enter custom instructions here..."}
+              className="min-h-[100px]"
+            />
+          </CardContent>
+        </Card>
 
         {/* Video Settings */}
-        <div className="bg-white rounded-lg shadow p-6 mb-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Video Settings</h2>
+        <Card className="mb-6">
+          <CardContent className="p-6">
+            <h2 className="text-lg font-semibold text-foreground mb-4">Video Settings</h2>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Aspect Ratio
-              </label>
-              <select
-                value={aspectRatio}
-                onChange={(e) => setAspectRatio(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-purple-500"
-              >
-                <option value="16:9">16:9 (Landscape)</option>
-                <option value="9:16">9:16 (Portrait)</option>
-                <option value="1:1">1:1 (Square)</option>
-              </select>
-            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <Label className="mb-2">
+                  Aspect Ratio
+                </Label>
+                <select
+                  value={aspectRatio}
+                  onChange={(e) => setAspectRatio(e.target.value)}
+                  className="mt-2 w-full px-4 py-2 bg-background border border-input rounded-lg text-foreground focus-visible:ring-1 focus-visible:ring-ring"
+                >
+                  <option value="16:9">16:9 (Landscape)</option>
+                  <option value="9:16">9:16 (Portrait)</option>
+                  <option value="1:1">1:1 (Square)</option>
+                </select>
+              </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Duration (seconds)
-              </label>
-              <select
-                value={duration}
-                onChange={(e) => setDuration(Number(e.target.value))}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-purple-500"
-              >
-                <option value={4}>4 seconds</option>
-                <option value={5}>5 seconds</option>
-                <option value={6}>6 seconds</option>
-                <option value={7}>7 seconds</option>
-                <option value={8}>8 seconds</option>
-              </select>
-            </div>
+              <div>
+                <Label className="mb-2">
+                  Duration (seconds)
+                </Label>
+                <select
+                  value={duration}
+                  onChange={(e) => setDuration(Number(e.target.value))}
+                  className="mt-2 w-full px-4 py-2 bg-background border border-input rounded-lg text-foreground focus-visible:ring-1 focus-visible:ring-ring"
+                >
+                  <option value={4}>4 seconds</option>
+                  <option value={5}>5 seconds</option>
+                  <option value={6}>6 seconds</option>
+                  <option value={7}>7 seconds</option>
+                  <option value={8}>8 seconds</option>
+                </select>
+              </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Resolution
-              </label>
-              <select
-                value={resolution}
-                onChange={(e) => setResolution(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-purple-500"
-              >
-                <option value="720p">720p</option>
-                <option value="1080p">1080p</option>
-              </select>
+              <div>
+                <Label className="mb-2">
+                  Resolution
+                </Label>
+                <select
+                  value={resolution}
+                  onChange={(e) => setResolution(e.target.value)}
+                  className="mt-2 w-full px-4 py-2 bg-background border border-input rounded-lg text-foreground focus-visible:ring-1 focus-visible:ring-ring"
+                >
+                  <option value="720p">720p</option>
+                  <option value="1080p">1080p</option>
+                </select>
+              </div>
             </div>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
 
         {/* Generate Button */}
         <div className="flex justify-center mb-6">
-          <button
+          <Button
             onClick={generateVideo}
             disabled={generating || !selectedTemplateId}
-            className={`px-8 py-3 rounded-lg font-semibold text-white transition ${
+            size="lg"
+            className={`px-8 font-semibold ${
               generating || !selectedTemplateId
-                ? 'bg-gray-400 cursor-not-allowed'
-                : 'bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700 shadow-lg'
+                ? ''
+                : 'bg-gradient-to-r from-violet-600 to-pink-600 hover:from-violet-500 hover:to-pink-500'
             }`}
           >
             {generating ? (
@@ -416,15 +424,15 @@ export default function GenerateVideoPage() {
                 Generating Video...
               </span>
             ) : (
-              '🎬 Generate Video'
+              'Generate Video'
             )}
-          </button>
+          </Button>
         </div>
 
         {/* Info Box */}
-        <div className="mb-6 bg-purple-50 border border-purple-200 rounded-lg p-4">
-          <h3 className="font-semibold text-purple-900 mb-2">How it works:</h3>
-          <ul className="list-disc list-inside text-sm text-purple-800 space-y-1">
+        <div className="mb-6 bg-violet-500/10 border border-violet-500/30 rounded-lg p-4">
+          <h3 className="font-semibold text-violet-300 mb-2">How it works:</h3>
+          <ul className="list-disc list-inside text-sm text-violet-400 space-y-1">
             <li>Select a video template that matches your needs</li>
             <li>Optionally choose a source image (Amazon or generated)</li>
             <li>Customize with additional instructions if needed</li>
@@ -434,82 +442,90 @@ export default function GenerateVideoPage() {
         </div>
 
         {/* Generated Videos */}
-        <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Generated Videos</h2>
+        <Card>
+          <CardHeader>
+            <CardTitle>Generated Videos</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {videos.length === 0 ? (
+              <p className="text-muted-foreground text-center py-8">No videos generated yet. Select a template and generate your first video!</p>
+            ) : (
+              <div className="space-y-4">
+                {videos.map((video) => (
+                  <div
+                    key={video.id}
+                    className="border border-border rounded-lg p-4 hover:border-input transition"
+                  >
+                    <div className="flex items-start justify-between mb-3">
+                      <div>
+                        <Badge variant={
+                          video.status === 'COMPLETED'
+                            ? 'success'
+                            : video.status === 'GENERATING'
+                            ? 'warning'
+                            : video.status === 'FAILED'
+                            ? 'destructive'
+                            : 'secondary'
+                        }>
+                          {video.status}
+                        </Badge>
+                        {video.videoType && (
+                          <span className="ml-2 text-sm font-medium text-violet-400">
+                            {video.videoType.name}
+                          </span>
+                        )}
+                        <p className="text-sm text-muted-foreground mt-2">
+                          {video.aspectRatio} * {video.durationSeconds}s * {video.resolution}
+                        </p>
+                      </div>
 
-          {videos.length === 0 ? (
-            <p className="text-gray-500 text-center py-8">No videos generated yet. Select a template and generate your first video!</p>
-          ) : (
-            <div className="space-y-4">
-              {videos.map((video) => (
-                <div
-                  key={video.id}
-                  className="border border-gray-200 rounded-lg p-4 hover:border-gray-300 transition"
-                >
-                  <div className="flex items-start justify-between mb-3">
-                    <div>
-                      <span className={`inline-block px-3 py-1 rounded-full text-sm font-semibold ${
-                        video.status === 'COMPLETED'
-                          ? 'bg-green-100 text-green-800'
-                          : video.status === 'GENERATING'
-                          ? 'bg-yellow-100 text-yellow-800'
-                          : video.status === 'FAILED'
-                          ? 'bg-red-100 text-red-800'
-                          : 'bg-gray-100 text-gray-800'
-                      }`}>
-                        {video.status}
-                      </span>
-                      {video.videoType && (
-                        <span className="ml-2 text-sm font-medium text-purple-600">
-                          {video.videoType.name}
-                        </span>
+                      {video.status === 'GENERATING' && video.operationName && (
+                        <Button
+                          size="sm"
+                          onClick={() => checkVideoStatus(video.operationName!, video.id)}
+                          disabled={checkingStatus === video.id}
+                        >
+                          {checkingStatus === video.id ? 'Checking...' : 'Check Status'}
+                        </Button>
                       )}
-                      <p className="text-sm text-gray-500 mt-2">
-                        {video.aspectRatio} • {video.durationSeconds}s • {video.resolution}
-                      </p>
                     </div>
 
-                    {video.status === 'GENERATING' && video.operationName && (
-                      <button
-                        onClick={() => checkVideoStatus(video.operationName!, video.id)}
-                        disabled={checkingStatus === video.id}
-                        className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:bg-gray-400 text-sm"
-                      >
-                        {checkingStatus === video.id ? 'Checking...' : 'Check Status'}
-                      </button>
+                    <p className="text-sm text-muted-foreground mb-3 line-clamp-2">{video.promptUsed}</p>
+
+                    {video.status === 'COMPLETED' && video.fileName && (
+                      <div className="mt-4">
+                        <video
+                          controls
+                          className="w-full rounded-lg max-h-96"
+                          src={`/api/uploads/${video.fileName}`}
+                        >
+                          Your browser does not support the video tag.
+                        </video>
+                        <Button
+                          asChild
+                          size="sm"
+                          className="mt-3 bg-success hover:bg-success/90"
+                        >
+                          <a
+                            href={`/api/uploads/${video.fileName}`}
+                            download
+                          >
+                            Download Video
+                          </a>
+                        </Button>
+                      </div>
                     )}
+
+                    <p className="text-xs text-muted-foreground mt-3">
+                      Created: {new Date(video.createdAt).toLocaleString()}
+                    </p>
                   </div>
-
-                  <p className="text-sm text-gray-700 mb-3 line-clamp-2">{video.promptUsed}</p>
-
-                  {video.status === 'COMPLETED' && video.fileName && (
-                    <div className="mt-4">
-                      <video
-                        controls
-                        className="w-full rounded-lg max-h-96"
-                        src={`/api/uploads/${video.fileName}`}
-                      >
-                        Your browser does not support the video tag.
-                      </video>
-                      <a
-                        href={`/api/uploads/${video.fileName}`}
-                        download
-                        className="inline-block mt-3 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 text-sm font-semibold"
-                      >
-                        📥 Download Video
-                      </a>
-                    </div>
-                  )}
-
-                  <p className="text-xs text-gray-400 mt-3">
-                    Created: {new Date(video.createdAt).toLocaleString()}
-                  </p>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
-    </div>
+    </DashboardLayout>
   )
 }

@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireAuth } from "@/lib/auth-helpers";
 import { writeFile } from 'fs/promises';
 import { join } from 'path';
 
 export async function POST(request: NextRequest) {
   try {
+    const authResult = await requireAuth();
+    if (authResult.error) return authResult.error;
+    const { user } = authResult;
+
     const { operationName } = await request.json();
 
     if (!operationName) {

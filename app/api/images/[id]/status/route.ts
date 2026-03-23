@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { requireAuth } from "@/lib/auth-helpers"
 import { z } from "zod"
 
 const updateStatusSchema = z.object({
@@ -13,12 +14,11 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params
+    const authResult = await requireAuth()
+    if (authResult.error) return authResult.error
+    const { user } = authResult
 
-    // Get default admin user for logging
-    const adminUser = await prisma.user.findFirst({
-      where: { role: 'ADMIN' }
-    })
+    const { id } = await params
 
     const body = await request.json()
     const validated = updateStatusSchema.parse(body)
@@ -63,11 +63,11 @@ export async function PATCH(
     })
 
     // Add comment if provided
-    if (validated.comment && adminUser) {
+    if (validated.comment) {
       await prisma.comment.create({
         data: {
           imageId: id,
-          userId: adminUser.id,
+          userId: user.id,
           content: validated.comment,
           issueTag: validated.status === 'NEEDS_REWORK' ? 'REWORK_REQUESTED' : undefined
         }
@@ -75,11 +75,10 @@ export async function PATCH(
     }
 
     // Log activity
-    if (adminUser) {
-      await prisma.activityLog.create({
-        data: {
-          userId: adminUser.id,
-          action: `IMAGE_${validated.status}`,
+    await prisma.activityLog.create({
+      data: {
+        userId: user.id,
+        action: `IMAGE_${validated.status}`,
         entityType: "GeneratedImage",
         entityId: image.id,
         metadata: {
@@ -89,8 +88,7 @@ export async function PATCH(
           status: validated.status
         }
       }
-      })
-    }
+    })
 
     // Update analytics
     const today = new Date()

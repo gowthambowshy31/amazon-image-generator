@@ -5,6 +5,10 @@ import { useParams, useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import ImageSelector from "@/app/components/ImageSelector"
 import TemplateSelector, { TemplateSelection } from "@/app/components/TemplateSelector"
+import DashboardLayout from "@/app/components/DashboardLayout"
+import { Button } from "@/components/ui/button"
+import { Textarea } from "@/components/ui/textarea"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
 interface SourceImage {
   id: string
@@ -147,25 +151,29 @@ export default function GenerateImagesPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
+      <DashboardLayout>
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+            <p className="mt-4 text-muted-foreground">Loading...</p>
+          </div>
         </div>
-      </div>
+      </DashboardLayout>
     )
   }
 
   if (!product) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold text-red-600 mb-4">Product not found</h2>
-          <Link href="/dashboard" className="text-blue-600 hover:underline">
-            Back to Dashboard
-          </Link>
+      <DashboardLayout>
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="text-center">
+            <h2 className="text-2xl font-bold text-destructive mb-4">Product not found</h2>
+            <Link href="/dashboard" className="text-primary hover:underline">
+              Back to Dashboard
+            </Link>
+          </div>
         </div>
-      </div>
+      </DashboardLayout>
     )
   }
 
@@ -174,35 +182,28 @@ export default function GenerateImagesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex justify-between items-center">
-            <div className="flex items-center gap-4">
-              <Link href={`/products/${product.id}`} className="text-gray-600 hover:text-gray-900">
-                &larr; Back
-              </Link>
-              <h1 className="text-2xl font-bold text-gray-900">Generate Images</h1>
-            </div>
-            <Link
-              href={`/products/${product.id}/generate-video`}
-              className="px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-600 text-white rounded-lg hover:from-purple-600 hover:to-pink-700 font-semibold shadow-lg"
-            >
+    <DashboardLayout>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-2">
+        <div className="flex justify-between items-center">
+          <h1 className="text-2xl font-bold text-foreground">Generate Image</h1>
+          <Button asChild className="bg-gradient-to-r from-violet-600 to-pink-600 hover:from-violet-500 hover:to-pink-500 font-semibold">
+            <Link href={`/products/${product.id}/generate-video`}>
               Generate Video
             </Link>
-          </div>
+          </Button>
         </div>
-      </header>
+      </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Product Info */}
-        <div className="bg-white rounded-lg shadow p-6 mb-6">
-          <h2 className="text-xl font-bold text-gray-900 mb-2">{product.title}</h2>
-          <p className="text-sm text-gray-500">
-            ASIN: {product.asin} | {product.sourceImages?.length || 0} source images available
-          </p>
-        </div>
+        <Card className="mb-6">
+          <CardContent className="p-6">
+            <h2 className="text-xl font-bold text-foreground mb-2">{product.title}</h2>
+            <p className="text-sm text-muted-foreground">
+              ASIN: {product.asin} | {product.sourceImages?.length || 0} source images available
+            </p>
+          </CardContent>
+        </Card>
 
         {/* Amazon Source Image Selection */}
         {product.sourceImages && product.sourceImages.length > 0 && (
@@ -268,40 +269,45 @@ export default function GenerateImagesPage() {
         )}
 
         {/* Custom Prompt */}
-        <div className="bg-white rounded-lg shadow p-6 mb-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">
-            {templateSelections.length > 0 ? "Additional Instructions (Optional)" : "Custom Prompt (Optional)"}
-          </h2>
-          <p className="text-sm text-gray-600 mb-4">
-            {templateSelections.length > 0
-              ? "Add any additional instructions to combine with the template prompts above."
-              : "Add specific instructions for the AI (e.g., \"make the diamond smaller\", \"increase product size\", \"brighter lighting\")."
-            }
-          </p>
-          <textarea
-            value={customPrompt}
-            onChange={(e) => setCustomPrompt(e.target.value)}
-            placeholder={templateSelections.length > 0 ? "Additional instructions (optional)..." : "Enter custom instructions here..."}
-            className="w-full border border-gray-300 rounded-lg p-3 min-h-[100px] text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          />
-        </div>
+        <Card className="mb-6">
+          <CardContent className="p-6">
+            <h2 className="text-lg font-semibold text-foreground mb-4">
+              {templateSelections.length > 0 ? "Additional Instructions (Optional)" : "Custom Prompt (Optional)"}
+            </h2>
+            <p className="text-sm text-muted-foreground mb-4">
+              {templateSelections.length > 0
+                ? "Add any additional instructions to combine with the template prompts above."
+                : "Add specific instructions for the AI (e.g., \"make the diamond smaller\", \"increase product size\", \"brighter lighting\")."
+              }
+            </p>
+            <Textarea
+              value={customPrompt}
+              onChange={(e) => setCustomPrompt(e.target.value)}
+              placeholder={templateSelections.length > 0 ? "Additional instructions (optional)..." : "Enter custom instructions here..."}
+              className="min-h-[100px]"
+            />
+          </CardContent>
+        </Card>
 
         {/* Generation Progress */}
         {progress && (
-          <div className="bg-white rounded-lg shadow p-6 mb-6">
-            <p className="text-center text-gray-700">{progress}</p>
-          </div>
+          <Card className="mb-6">
+            <CardContent className="p-6">
+              <p className="text-center text-muted-foreground">{progress}</p>
+            </CardContent>
+          </Card>
         )}
 
         {/* Generate Button */}
         <div className="flex justify-center">
-          <button
+          <Button
             onClick={generateImages}
             disabled={generating || templateSelections.length === 0}
-            className={`px-8 py-3 rounded-lg font-semibold text-white transition ${
+            size="lg"
+            className={`px-8 font-semibold ${
               generating || templateSelections.length === 0
-                ? 'bg-gray-400 cursor-not-allowed'
-                : 'bg-green-600 hover:bg-green-700'
+                ? ''
+                : 'bg-success hover:bg-success/90'
             }`}
           >
             {generating ? (
@@ -312,13 +318,13 @@ export default function GenerateImagesPage() {
             ) : (
               `Generate ${templateSelections.length} Image${templateSelections.length !== 1 ? 's' : ''}`
             )}
-          </button>
+          </Button>
         </div>
 
         {/* Info Box */}
-        <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <h3 className="font-semibold text-blue-900 mb-2">How it works:</h3>
-          <ul className="list-disc list-inside text-sm text-blue-800 space-y-1">
+        <div className="mt-6 bg-primary/10 border border-primary/30 rounded-lg p-4">
+          <h3 className="font-semibold text-primary mb-2">How it works:</h3>
+          <ul className="list-disc list-inside text-sm text-primary space-y-1">
             <li>Select the templates for the types of images you want to generate</li>
             <li>AI will analyze your product&apos;s source images from Amazon</li>
             <li>New marketing images will be created based on the selected templates</li>
@@ -326,6 +332,6 @@ export default function GenerateImagesPage() {
           </ul>
         </div>
       </div>
-    </div>
+    </DashboardLayout>
   )
 }

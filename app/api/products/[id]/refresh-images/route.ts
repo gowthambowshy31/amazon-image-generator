@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { requireAuth } from "@/lib/auth-helpers"
 import { getAmazonSPClient } from "@/lib/amazon-sp"
 import { downloadAndStoreImage } from "@/lib/image-storage"
 
@@ -12,6 +13,10 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const authResult = await requireAuth()
+    if (authResult.error) return authResult.error
+    const { user } = authResult
+
     const { id } = await params
 
     // Get product from database
@@ -23,6 +28,13 @@ export async function POST(
     })
 
     if (!product) {
+      return NextResponse.json(
+        { error: "Product not found" },
+        { status: 404 }
+      )
+    }
+
+    if (user.organizationId && product.organizationId !== user.organizationId) {
       return NextResponse.json(
         { error: "Product not found" },
         { status: 404 }

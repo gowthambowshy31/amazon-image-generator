@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { requireAuth } from "@/lib/auth-helpers"
 
 interface RouteParams {
   params: Promise<{
@@ -16,7 +17,20 @@ export async function GET(
   { params }: RouteParams
 ) {
   try {
+    const authResult = await requireAuth()
+    if (authResult.error) return authResult.error
+    const { user } = authResult
+
     const { id } = await params
+
+    // Verify product exists and belongs to user's org
+    const product = await prisma.product.findUnique({ where: { id } })
+    if (!product) {
+      return NextResponse.json({ error: "Product not found" }, { status: 404 })
+    }
+    if (user.organizationId && product.organizationId !== user.organizationId) {
+      return NextResponse.json({ error: "Product not found" }, { status: 404 })
+    }
 
     const sourceImages = await prisma.sourceImage.findMany({
       where: {

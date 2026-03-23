@@ -13,33 +13,47 @@ const prisma = new PrismaClient({ adapter })
 async function main() {
   console.log('🌱 Starting database seed...')
 
+  // Create Privosa organization
+  const privosaOrg = await prisma.organization.upsert({
+    where: { slug: 'privosa' },
+    update: {},
+    create: {
+      name: 'Privosa',
+      slug: 'privosa',
+    }
+  })
+
+  console.log('✅ Created organization:', privosaOrg.name)
+
   // Create default users
-  const adminPassword = await bcrypt.hash('admin123', 10)
-  const clientPassword = await bcrypt.hash('client123', 10)
+  const adminPassword = await bcrypt.hash('Privosa@123', 10)
 
   const admin = await prisma.user.upsert({
-    where: { email: 'admin@imageGen.com' },
-    update: {},
-    create: {
-      email: 'admin@imageGen.com',
-      name: 'Admin User',
+    where: { email: 'gowtham@privosa.com' },
+    update: {
       password: adminPassword,
-      role: 'ADMIN'
-    }
-  })
-
-  const client = await prisma.user.upsert({
-    where: { email: 'client@example.com' },
-    update: {},
+      organizationId: privosaOrg.id,
+    },
     create: {
-      email: 'client@example.com',
-      name: 'Client User',
-      password: clientPassword,
-      role: 'CLIENT'
+      email: 'gowtham@privosa.com',
+      name: 'Gowtham',
+      password: adminPassword,
+      role: 'ADMIN',
+      organizationId: privosaOrg.id,
     }
   })
 
-  console.log('✅ Created users:', { admin: admin.email, client: client.email })
+  console.log('✅ Created user:', admin.email)
+
+  // Associate any existing products without an organization to Privosa
+  const unassignedProducts = await prisma.product.updateMany({
+    where: { organizationId: null as any },
+    data: { organizationId: privosaOrg.id }
+  })
+
+  if (unassignedProducts.count > 0) {
+    console.log(`✅ Associated ${unassignedProducts.count} existing products with Privosa`)
+  }
 
   // Create default image types
   const imageTypes = [
@@ -625,8 +639,7 @@ Product: {{product_name}}`,
 
   console.log('🎉 Database seeded successfully!')
   console.log('\nDefault credentials:')
-  console.log('  Admin: admin@imageGen.com / admin123')
-  console.log('  Client: client@example.com / client123')
+  console.log('  Admin: gowtham@privosa.com / Privosa@123')
 }
 
 main()

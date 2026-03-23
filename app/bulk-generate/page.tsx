@@ -3,6 +3,12 @@
 import { useEffect, useState, useCallback } from "react"
 import Link from "next/link"
 import TemplateSelector, { TemplateSelection } from "@/app/components/TemplateSelector"
+import DashboardLayout from "@/app/components/DashboardLayout"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { Badge } from "@/components/ui/badge"
+import { Card, CardContent } from "@/components/ui/card"
 
 interface SourceImage {
   id: string
@@ -349,51 +355,42 @@ export default function BulkGeneratePage() {
 
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case "COMPLETED": return "bg-green-100 text-green-800"
-      case "FAILED": return "bg-red-100 text-red-800"
-      case "PROCESSING": return "bg-blue-100 text-blue-800"
-      case "QUEUED": return "bg-gray-100 text-gray-800"
-      case "CANCELLED": return "bg-yellow-100 text-yellow-800"
-      default: return "bg-gray-100 text-gray-800"
+      case "COMPLETED": return "bg-success/20 text-success"
+      case "FAILED": return "bg-destructive/20 text-destructive"
+      case "PROCESSING": return "bg-primary/20 text-primary"
+      case "QUEUED": return "bg-muted text-muted-foreground"
+      case "CANCELLED": return "bg-warning/20 text-warning"
+      default: return "bg-muted text-muted-foreground"
     }
   }
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+          <p className="mt-4 text-muted-foreground">Loading...</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex justify-between items-center">
-            <div className="flex items-center gap-4">
-              <Link href="/dashboard" className="text-gray-600 hover:text-gray-900">
-                &larr; Back to Dashboard
-              </Link>
-              <h1 className="text-2xl font-bold text-gray-900">Bulk Generate Images</h1>
-            </div>
-          </div>
-        </div>
-      </header>
+    <DashboardLayout>
+      {/* Page Header */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-2">
+        <h1 className="text-2xl font-bold text-foreground">Bulk Generate Images</h1>
+      </div>
 
       {/* Tab Bar */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6">
-        <div className="flex gap-1 border-b border-gray-200">
+        <div className="flex gap-1 border-b border-border">
           <button
             onClick={() => setActiveTab("generate")}
             className={`px-5 py-3 text-sm font-medium border-b-2 transition ${
               activeTab === "generate"
-                ? "border-blue-600 text-blue-600"
-                : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground hover:text-foreground hover:border-input"
             }`}
           >
             + New Generation
@@ -402,8 +399,8 @@ export default function BulkGeneratePage() {
             onClick={() => setActiveTab("history")}
             className={`px-5 py-3 text-sm font-medium border-b-2 transition ${
               activeTab === "history"
-                ? "border-blue-600 text-blue-600"
-                : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground hover:text-foreground hover:border-input"
             }`}
           >
             Job History
@@ -416,49 +413,48 @@ export default function BulkGeneratePage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
 
           {/* Step 1: Select Products */}
-          <div className="bg-white rounded-lg shadow p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-1">Step 1: Select Products</h2>
-            <p className="text-sm text-gray-500 mb-4">
+          <div className="bg-card border border-border rounded-lg shadow-sm p-6">
+            <h2 className="text-lg font-semibold text-foreground mb-1">Step 1: Select Products</h2>
+            <p className="text-sm text-muted-foreground mb-4">
               Choose the products you want to generate images for. {selectedProducts.size > 0 && `${selectedProducts.size} selected`}
             </p>
 
             {/* Search */}
             <div className="mb-4">
-              <input
+              <Input
                 type="text"
                 placeholder="Search by title or ASIN..."
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
 
             {/* Product table */}
-            <div className="overflow-x-auto max-h-96 overflow-y-auto border rounded-lg">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50 sticky top-0">
+            <div className="overflow-x-auto max-h-96 overflow-y-auto border border-border rounded-lg">
+              <table className="min-w-full divide-y divide-border">
+                <thead className="bg-card sticky top-0">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
                       <input
                         type="checkbox"
                         checked={selectedProducts.size === filteredProducts.length && filteredProducts.length > 0}
                         onChange={toggleSelectAll}
-                        className="w-4 h-4 text-blue-600 border-gray-300 rounded"
+                        className="w-4 h-4 text-primary border-input rounded bg-accent"
                       />
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Product</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">ASIN</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Source Images</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Variants</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Product</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">ASIN</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Source Images</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Variants</th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
+                <tbody className="bg-card divide-y divide-border">
                   {filteredProducts.map(product => {
                     const uniqueVariants = Array.from(new Set(product.sourceImages.map(i => i.variant)))
                     return (
                       <tr
                         key={product.id}
-                        className={`hover:bg-gray-50 cursor-pointer ${selectedProducts.has(product.id) ? "bg-blue-50" : ""}`}
+                        className={`hover:bg-accent cursor-pointer ${selectedProducts.has(product.id) ? "bg-primary/10" : ""}`}
                         onClick={() => toggleProduct(product.id)}
                       >
                         <td className="px-4 py-3">
@@ -466,16 +462,16 @@ export default function BulkGeneratePage() {
                             type="checkbox"
                             checked={selectedProducts.has(product.id)}
                             onChange={() => {}}
-                            className="w-4 h-4 text-blue-600 border-gray-300 rounded"
+                            className="w-4 h-4 text-primary border-input rounded bg-accent"
                           />
                         </td>
-                        <td className="px-4 py-3 text-sm text-gray-900">{product.title}</td>
-                        <td className="px-4 py-3 text-sm text-gray-500">{product.asin || "-"}</td>
-                        <td className="px-4 py-3 text-sm text-gray-500">{product._count.sourceImages}</td>
+                        <td className="px-4 py-3 text-sm text-foreground">{product.title}</td>
+                        <td className="px-4 py-3 text-sm text-muted-foreground">{product.asin || "-"}</td>
+                        <td className="px-4 py-3 text-sm text-muted-foreground">{product._count.sourceImages}</td>
                         <td className="px-4 py-3 text-sm">
                           <div className="flex gap-1 flex-wrap">
                             {uniqueVariants.map(v => (
-                              <span key={v} className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded">
+                              <span key={v} className="px-2 py-0.5 bg-accent text-muted-foreground text-xs rounded">
                                 {v}
                               </span>
                             ))}
@@ -491,13 +487,13 @@ export default function BulkGeneratePage() {
             <div className="mt-3 flex gap-3">
               <button
                 onClick={() => setSelectedProducts(new Set(filteredProducts.map(p => p.id)))}
-                className="px-3 py-1 text-sm text-blue-600 hover:bg-blue-50 rounded"
+                className="px-3 py-1 text-sm text-primary hover:bg-primary/90/10 rounded"
               >
                 Select All ({filteredProducts.length})
               </button>
               <button
                 onClick={() => setSelectedProducts(new Set())}
-                className="px-3 py-1 text-sm text-gray-600 hover:bg-gray-50 rounded"
+                className="px-3 py-1 text-sm text-muted-foreground hover:bg-accent rounded"
               >
                 Deselect All
               </button>
@@ -506,9 +502,9 @@ export default function BulkGeneratePage() {
 
           {/* Step 2: Select Variant */}
           {selectedProducts.size > 0 && (
-            <div className="bg-white rounded-lg shadow p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-1">Step 2: Select Image Variant</h2>
-              <p className="text-sm text-gray-500 mb-4">
+            <div className="bg-card border border-border rounded-lg shadow-sm p-6">
+              <h2 className="text-lg font-semibold text-foreground mb-1">Step 2: Select Image Variant</h2>
+              <p className="text-sm text-muted-foreground mb-4">
                 Choose which image position to use from each product.
               </p>
 
@@ -519,19 +515,19 @@ export default function BulkGeneratePage() {
                     onClick={() => setSelectedVariant(variant)}
                     className={`border-2 rounded-lg p-3 text-center transition ${
                       selectedVariant === variant
-                        ? "border-blue-600 bg-blue-50"
-                        : "border-gray-200 hover:border-gray-300"
+                        ? "border-primary bg-primary/10"
+                        : "border-border hover:border-input"
                     }`}
                   >
-                    <p className="font-semibold text-gray-900">{variant}</p>
-                    <p className="text-sm text-gray-500">{count}/{selectedProducts.size} products</p>
+                    <p className="font-semibold text-foreground">{variant}</p>
+                    <p className="text-sm text-muted-foreground">{count}/{selectedProducts.size} products</p>
                   </button>
                 ))}
               </div>
 
               {selectedVariant && missingCount > 0 && (
-                <div className="mt-4 bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-                  <p className="text-sm text-yellow-700">
+                <div className="mt-4 bg-warning/10 border border-warning/30 rounded-lg p-3">
+                  <p className="text-sm text-warning">
                     {missingCount} selected product{missingCount !== 1 ? "s" : ""} don&apos;t have a {selectedVariant} image and will be skipped.
                   </p>
                 </div>
@@ -541,7 +537,7 @@ export default function BulkGeneratePage() {
               {selectedVariant && previewImages.length > 0 && (
                 <div className="mt-4">
                   <div className="flex justify-between items-center mb-2">
-                    <p className="text-sm text-gray-600">
+                    <p className="text-sm text-muted-foreground">
                       Preview: {selectedVariant} images ({selectedPreviewCount} selected of {previewImages.length})
                     </p>
                     <div className="flex gap-2">
@@ -552,7 +548,7 @@ export default function BulkGeneratePage() {
                           variantProductIds.forEach(id => next.add(id))
                           setSelectedProducts(next)
                         }}
-                        className="text-xs text-blue-600 hover:underline"
+                        className="text-xs text-primary hover:underline"
                       >
                         Select All
                       </button>
@@ -563,7 +559,7 @@ export default function BulkGeneratePage() {
                           variantProductIds.forEach(id => next.delete(id))
                           setSelectedProducts(next)
                         }}
-                        className="text-xs text-gray-500 hover:underline"
+                        className="text-xs text-muted-foreground hover:underline"
                       >
                         Deselect All
                       </button>
@@ -576,8 +572,8 @@ export default function BulkGeneratePage() {
                         onClick={() => toggleProduct(item.productId)}
                         className={`relative border-2 rounded p-1 cursor-pointer transition-all ${
                           item.selected
-                            ? "border-green-500 bg-green-50"
-                            : "border-gray-200 bg-gray-50 hover:border-gray-300"
+                            ? "border-success bg-success/10"
+                            : "border-border bg-card hover:border-input"
                         }`}
                       >
                         <img
@@ -588,12 +584,12 @@ export default function BulkGeneratePage() {
                           }`}
                         />
                         <p className={`text-xs truncate mt-1 ${
-                          item.selected ? "text-gray-700" : "text-gray-400"
+                          item.selected ? "text-muted-foreground" : "text-muted-foreground"
                         }`}>
                           {item.asin || item.title.substring(0, 15)}
                         </p>
                         {item.selected && (
-                          <div className="absolute top-0.5 right-0.5 bg-green-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">
+                          <div className="absolute top-0.5 right-0.5 bg-success text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">
                             &#10003;
                           </div>
                         )}
@@ -617,21 +613,21 @@ export default function BulkGeneratePage() {
               />
 
               {/* Custom Prompt */}
-              <div className="bg-white rounded-lg shadow p-6">
-                <h2 className="text-lg font-semibold text-gray-900 mb-1">
+              <div className="bg-card border border-border rounded-lg shadow-sm p-6">
+                <h2 className="text-lg font-semibold text-foreground mb-1">
                   {templateSelection ? "Additional Instructions (Optional)" : "Custom Prompt (Optional)"}
                 </h2>
-                <p className="text-sm text-gray-500 mb-4">
+                <p className="text-sm text-muted-foreground mb-4">
                   {templateSelection
                     ? "Add any additional instructions to combine with the template prompt."
                     : "Select a template above first, then optionally add extra instructions."
                   }
                 </p>
-                <textarea
+                <Textarea
                   value={customPrompt}
                   onChange={e => setCustomPrompt(e.target.value)}
                   placeholder={templateSelection ? "Additional instructions (optional)..." : "Select a template first..."}
-                  className="w-full border border-gray-300 rounded-lg p-3 min-h-[100px] text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="min-h-[100px]"
                 />
               </div>
             </>
@@ -639,44 +635,40 @@ export default function BulkGeneratePage() {
 
           {/* Step 4: Review & Generate */}
           {selectedProducts.size > 0 && selectedVariant && templateSelection && (
-            <div className="bg-white rounded-lg shadow p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Review & Generate</h2>
+            <div className="bg-card border border-border rounded-lg shadow-sm p-6">
+              <h2 className="text-lg font-semibold text-foreground mb-4">Review & Generate</h2>
 
-              <div className="bg-gray-50 rounded-lg p-4 mb-4">
+              <div className="bg-background rounded-lg p-4 mb-4">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                   <div>
-                    <p className="text-gray-500">Products Selected</p>
-                    <p className="font-semibold text-gray-900">{selectedProducts.size}</p>
+                    <p className="text-muted-foreground">Products Selected</p>
+                    <p className="font-semibold text-foreground">{selectedProducts.size}</p>
                   </div>
                   <div>
-                    <p className="text-gray-500">Variant</p>
-                    <p className="font-semibold text-gray-900">{selectedVariant}</p>
+                    <p className="text-muted-foreground">Variant</p>
+                    <p className="font-semibold text-foreground">{selectedVariant}</p>
                   </div>
                   <div>
-                    <p className="text-gray-500">Template</p>
-                    <p className="font-semibold text-gray-900">
+                    <p className="text-muted-foreground">Template</p>
+                    <p className="font-semibold text-foreground">
                       {templateSelection.templateName}
                     </p>
                   </div>
                   <div>
-                    <p className="text-gray-500">Images to Generate</p>
-                    <p className="font-semibold text-green-600">{eligibleCount}</p>
+                    <p className="text-muted-foreground">Images to Generate</p>
+                    <p className="font-semibold text-success">{eligibleCount}</p>
                     {missingCount > 0 && (
-                      <p className="text-xs text-yellow-600">{missingCount} will be skipped</p>
+                      <p className="text-xs text-warning">{missingCount} will be skipped</p>
                     )}
                   </div>
                 </div>
               </div>
 
               <div className="flex justify-center">
-                <button
+                <Button
                   onClick={handleGenerate}
                   disabled={generating || eligibleCount === 0}
-                  className={`px-8 py-3 rounded-lg font-semibold text-white transition ${
-                    generating || eligibleCount === 0
-                      ? "bg-gray-400 cursor-not-allowed"
-                      : "bg-green-600 hover:bg-green-700"
-                  }`}
+                  className="px-8 py-3 bg-success hover:bg-success/90 text-white font-semibold"
                 >
                   {generating ? (
                     <span className="flex items-center gap-2">
@@ -686,19 +678,19 @@ export default function BulkGeneratePage() {
                   ) : (
                     `Generate ${eligibleCount} Image${eligibleCount !== 1 ? "s" : ""}`
                   )}
-                </button>
+                </Button>
               </div>
             </div>
           )}
 
           {/* Job Progress */}
           {job && (
-            <div className="bg-white rounded-lg shadow p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Generation Progress</h2>
+            <div className="bg-card border border-border rounded-lg shadow-sm p-6">
+              <h2 className="text-lg font-semibold text-foreground mb-4">Generation Progress</h2>
 
               {/* Progress bar */}
               <div className="mb-4">
-                <div className="flex justify-between text-sm text-gray-600 mb-1">
+                <div className="flex justify-between text-sm text-muted-foreground mb-1">
                   <span>
                     {job.completedImages + job.failedImages} / {job.totalImages} processed
                   </span>
@@ -709,11 +701,11 @@ export default function BulkGeneratePage() {
                     }
                   </span>
                 </div>
-                <div className="w-full bg-gray-200 rounded-full h-3">
+                <div className="w-full bg-accent rounded-full h-3">
                   <div
                     className={`h-3 rounded-full transition-all duration-500 ${
-                      job.status === "FAILED" ? "bg-red-500" :
-                      job.status === "COMPLETED" ? "bg-green-500" : "bg-blue-500"
+                      job.status === "FAILED" ? "bg-destructive" :
+                      job.status === "COMPLETED" ? "bg-success" : "bg-primary"
                     }`}
                     style={{ width: `${Math.round(((job.completedImages + job.failedImages) / job.totalImages) * 100)}%` }}
                   />
@@ -722,24 +714,24 @@ export default function BulkGeneratePage() {
 
               {/* Stats */}
               <div className="grid grid-cols-3 gap-4 mb-4">
-                <div className="text-center p-3 bg-green-50 rounded-lg">
-                  <p className="text-2xl font-bold text-green-600">{job.completedImages}</p>
-                  <p className="text-sm text-green-700">Completed</p>
+                <div className="text-center p-3 bg-success/10 rounded-lg">
+                  <p className="text-2xl font-bold text-success">{job.completedImages}</p>
+                  <p className="text-sm text-success">Completed</p>
                 </div>
-                <div className="text-center p-3 bg-red-50 rounded-lg">
-                  <p className="text-2xl font-bold text-red-600">{job.failedImages}</p>
-                  <p className="text-sm text-red-700">Failed</p>
+                <div className="text-center p-3 bg-destructive/10 rounded-lg">
+                  <p className="text-2xl font-bold text-destructive">{job.failedImages}</p>
+                  <p className="text-sm text-destructive">Failed</p>
                 </div>
-                <div className="text-center p-3 bg-gray-50 rounded-lg">
-                  <p className="text-2xl font-bold text-gray-600">
+                <div className="text-center p-3 bg-card rounded-lg">
+                  <p className="text-2xl font-bold text-muted-foreground">
                     {job.totalImages - job.completedImages - job.failedImages}
                   </p>
-                  <p className="text-sm text-gray-700">Remaining</p>
+                  <p className="text-sm text-muted-foreground">Remaining</p>
                 </div>
               </div>
 
               {skippedCount > 0 && (
-                <p className="text-sm text-yellow-600 mb-3">
+                <p className="text-sm text-warning mb-3">
                   {skippedCount} product{skippedCount !== 1 ? "s" : ""} skipped (missing selected variant)
                 </p>
               )}
@@ -747,10 +739,10 @@ export default function BulkGeneratePage() {
               {/* Error log */}
               {job.errorLog && (
                 <div className="mt-4">
-                  <p className="text-sm font-medium text-red-700 mb-2">Errors:</p>
-                  <div className="bg-red-50 border border-red-200 rounded-lg p-3 max-h-40 overflow-y-auto">
+                  <p className="text-sm font-medium text-destructive mb-2">Errors:</p>
+                  <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-3 max-h-40 overflow-y-auto">
                     {job.errorLog.split("\n").map((err, i) => (
-                      <p key={i} className="text-sm text-red-600">{err}</p>
+                      <p key={i} className="text-sm text-destructive">{err}</p>
                     ))}
                   </div>
                 </div>
@@ -758,16 +750,27 @@ export default function BulkGeneratePage() {
 
               {/* Done message */}
               {(job.status === "COMPLETED" || job.status === "FAILED") && (
-                <div className={`mt-4 p-4 rounded-lg ${job.status === "COMPLETED" ? "bg-green-50 border border-green-200" : "bg-red-50 border border-red-200"}`}>
-                  <p className={`font-semibold ${job.status === "COMPLETED" ? "text-green-700" : "text-red-700"}`}>
+                <div className={`mt-4 p-4 rounded-lg ${job.status === "COMPLETED" ? "bg-success/10 border border-success/30" : "bg-destructive/10 border border-destructive/30"}`}>
+                  <p className={`font-semibold ${job.status === "COMPLETED" ? "text-success" : "text-destructive"}`}>
                     {job.status === "COMPLETED"
                       ? `Bulk generation complete! ${job.completedImages} image${job.completedImages !== 1 ? "s" : ""} generated successfully.`
                       : "Bulk generation finished with errors."
                     }
                   </p>
-                  <p className="mt-2 text-sm text-gray-600">
+                  <p className="mt-2 text-sm text-muted-foreground">
                     Switching to Job History tab to view results...
                   </p>
+                  {job.status === "COMPLETED" && job.completedImages > 0 && (
+                    <Link
+                      href="/bulk-push"
+                      className="mt-3 inline-flex items-center gap-2 px-4 py-2 bg-warning text-white text-sm rounded-lg hover:bg-warning transition"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                      </svg>
+                      Push Generated Images to Amazon
+                    </Link>
+                  )}
                 </div>
               )}
             </div>
@@ -780,69 +783,70 @@ export default function BulkGeneratePage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
 
           {historyLoading && historyJobs.length === 0 ? (
-            <div className="bg-white rounded-lg shadow p-12 text-center">
-              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mx-auto"></div>
-              <p className="mt-4 text-gray-600">Loading job history...</p>
+            <div className="bg-card border border-border rounded-lg shadow-sm p-12 text-center">
+              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary mx-auto"></div>
+              <p className="mt-4 text-muted-foreground">Loading job history...</p>
             </div>
           ) : historyJobs.length === 0 ? (
-            <div className="bg-white rounded-lg shadow p-12 text-center">
-              <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div className="bg-card border border-border rounded-lg shadow-sm p-12 text-center">
+              <svg className="mx-auto h-12 w-12 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
               </svg>
-              <h3 className="mt-2 text-sm font-medium text-gray-900">No generation jobs yet</h3>
-              <p className="mt-1 text-sm text-gray-500">
+              <h3 className="mt-2 text-sm font-medium text-foreground">No generation jobs yet</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
                 Start a new bulk generation to see job history here.
               </p>
-              <button
+              <Button
                 onClick={() => setActiveTab("generate")}
-                className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm"
+                className="mt-4"
+                size="sm"
               >
                 Start New Generation
-              </button>
+              </Button>
             </div>
           ) : (
             <>
               {/* Job list */}
               <div className="space-y-4">
                 {historyJobs.map(hJob => (
-                  <div key={hJob.id} className="bg-white rounded-lg shadow">
+                  <div key={hJob.id} className="bg-card border border-border rounded-lg shadow-sm">
                     {/* Job summary row */}
                     <div className="p-5">
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
                           <div className="flex items-center gap-3 mb-2">
-                            <span className={`px-2.5 py-0.5 text-xs font-semibold rounded-full ${getStatusBadge(hJob.status)}`}>
+                            <Badge variant="outline" className={getStatusBadge(hJob.status)}>
                               {hJob.status}
-                            </span>
-                            <span className="text-sm text-gray-500">{formatDate(hJob.createdAt)}</span>
+                            </Badge>
+                            <span className="text-sm text-muted-foreground">{formatDate(hJob.createdAt)}</span>
                             {hJob.startedAt && hJob.completedAt && (
-                              <span className="text-xs text-gray-400">
+                              <span className="text-xs text-muted-foreground">
                                 Duration: {formatDuration(hJob.startedAt, hJob.completedAt)}
                               </span>
                             )}
                           </div>
                           <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
                             <div>
-                              <p className="text-gray-500">Variant</p>
-                              <p className="font-medium text-gray-900">{hJob.variant || "N/A"}</p>
+                              <p className="text-muted-foreground">Variant</p>
+                              <p className="font-medium text-foreground">{hJob.variant || "N/A"}</p>
                             </div>
                             <div>
-                              <p className="text-gray-500">Template</p>
-                              <p className="font-medium text-gray-900">
+                              <p className="text-muted-foreground">Template</p>
+                              <p className="font-medium text-foreground">
                                 {(hJob.templateNames && hJob.templateNames[0]) || hJob.imageTypeNames[0] || "N/A"}
                               </p>
                             </div>
                             <div>
-                              <p className="text-gray-500">Products</p>
-                              <p className="font-medium text-gray-900">{hJob.productIds.length}</p>
+                              <p className="text-muted-foreground">Products</p>
+                              <p className="font-medium text-foreground">{hJob.productIds.length}</p>
                             </div>
                             <div>
-                              <p className="text-gray-500">Completed</p>
-                              <p className="font-medium text-green-600">{hJob.completedImages}/{hJob.totalImages}</p>
+                              <p className="text-muted-foreground">Completed</p>
+                              <p className="font-medium text-success">{hJob.completedImages}/{hJob.totalImages}</p>
                             </div>
                             <div>
-                              <p className="text-gray-500">Failed</p>
-                              <p className={`font-medium ${hJob.failedImages > 0 ? "text-red-600" : "text-gray-400"}`}>
+                              <p className="text-muted-foreground">Failed</p>
+                              <p className={`font-medium ${hJob.failedImages > 0 ? "text-destructive" : "text-muted-foreground"}`}>
                                 {hJob.failedImages}
                               </p>
                             </div>
@@ -852,8 +856,8 @@ export default function BulkGeneratePage() {
                           onClick={() => loadJobImages(hJob.id)}
                           className={`ml-4 px-4 py-2 text-sm rounded-lg transition ${
                             expandedJobId === hJob.id
-                              ? "bg-blue-100 text-blue-700"
-                              : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                              ? "bg-primary/20 text-primary"
+                              : "bg-accent text-muted-foreground hover:bg-muted"
                           }`}
                         >
                           {expandedJobId === hJob.id ? "Hide Images" : "View Images"}
@@ -863,10 +867,10 @@ export default function BulkGeneratePage() {
                       {/* Prompt used */}
                       {hJob.promptUsed && (
                         <details className="mt-3">
-                          <summary className="text-xs text-gray-500 cursor-pointer hover:text-gray-700">
+                          <summary className="text-xs text-muted-foreground cursor-pointer hover:text-muted-foreground">
                             View prompt used
                           </summary>
-                          <pre className="mt-2 text-xs text-gray-600 bg-gray-50 rounded p-3 whitespace-pre-wrap max-h-32 overflow-y-auto">
+                          <pre className="mt-2 text-xs text-muted-foreground bg-background rounded p-3 whitespace-pre-wrap max-h-32 overflow-y-auto">
                             {hJob.promptUsed}
                           </pre>
                         </details>
@@ -875,12 +879,12 @@ export default function BulkGeneratePage() {
                       {/* Error log */}
                       {hJob.errorLog && (
                         <details className="mt-2">
-                          <summary className="text-xs text-red-500 cursor-pointer hover:text-red-700">
+                          <summary className="text-xs text-destructive cursor-pointer hover:text-destructive">
                             View errors ({hJob.failedImages} failed)
                           </summary>
-                          <div className="mt-2 bg-red-50 border border-red-200 rounded p-3 max-h-32 overflow-y-auto">
+                          <div className="mt-2 bg-destructive/10 border border-destructive/30 rounded p-3 max-h-32 overflow-y-auto">
                             {hJob.errorLog.split("\n").map((err, i) => (
-                              <p key={i} className="text-xs text-red-600">{err}</p>
+                              <p key={i} className="text-xs text-destructive">{err}</p>
                             ))}
                           </div>
                         </details>
@@ -889,41 +893,41 @@ export default function BulkGeneratePage() {
 
                     {/* Expanded: Generated images */}
                     {expandedJobId === hJob.id && (
-                      <div className="border-t border-gray-200 p-5 bg-gray-50">
+                      <div className="border-t border-border p-5 bg-background">
                         {jobImagesLoading === hJob.id ? (
                           <div className="text-center py-6">
-                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-                            <p className="mt-2 text-sm text-gray-500">Loading images...</p>
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+                            <p className="mt-2 text-sm text-muted-foreground">Loading images...</p>
                           </div>
                         ) : (jobImages[hJob.id] || []).length === 0 ? (
-                          <p className="text-sm text-gray-500 text-center py-4">No generated images found for this job.</p>
+                          <p className="text-sm text-muted-foreground text-center py-4">No generated images found for this job.</p>
                         ) : (
                           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
                             {(jobImages[hJob.id] || []).map(img => (
                               <Link
                                 key={img.id}
                                 href={`/products/${img.product.id}`}
-                                className="block border rounded-lg bg-white overflow-hidden hover:shadow-md transition group"
+                                className="block border border-border rounded-lg bg-card overflow-hidden hover:shadow-sm transition group"
                               >
                                 <div className="relative">
                                   <img
                                     src={getImageUrl(img)}
                                     alt={img.fileName}
-                                    className="w-full h-32 object-contain bg-white"
+                                    className="w-full h-32 object-contain bg-card"
                                   />
                                   <span className={`absolute top-1 right-1 px-1.5 py-0.5 text-xs rounded ${
-                                    img.status === "COMPLETED" ? "bg-green-100 text-green-700" :
-                                    img.status === "REJECTED" ? "bg-red-100 text-red-700" :
-                                    "bg-gray-100 text-gray-700"
+                                    img.status === "COMPLETED" ? "bg-success/20 text-success" :
+                                    img.status === "REJECTED" ? "bg-destructive/20 text-destructive" :
+                                    "bg-muted text-muted-foreground"
                                   }`}>
                                     {img.status === "COMPLETED" ? "OK" : img.status}
                                   </span>
                                 </div>
                                 <div className="p-2">
-                                  <p className="text-xs font-medium text-gray-900 truncate group-hover:text-blue-600">
+                                  <p className="text-xs font-medium text-foreground truncate group-hover:text-primary">
                                     {img.product.asin || img.product.title.substring(0, 20)}
                                   </p>
-                                  <p className="text-xs text-gray-400 truncate">
+                                  <p className="text-xs text-muted-foreground truncate">
                                     {img.templateName || img.template?.name || img.imageType?.name || "Generated"}
                                   </p>
                                 </div>
@@ -940,29 +944,31 @@ export default function BulkGeneratePage() {
               {/* Pagination */}
               {historyTotalPages > 1 && (
                 <div className="flex justify-center gap-2">
-                  <button
+                  <Button
+                    variant="outline"
+                    size="sm"
                     onClick={() => loadHistory(historyPage - 1)}
                     disabled={historyPage <= 1}
-                    className="px-4 py-2 text-sm border rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
                   >
                     Previous
-                  </button>
-                  <span className="px-4 py-2 text-sm text-gray-600">
+                  </Button>
+                  <span className="px-4 py-2 text-sm text-muted-foreground">
                     Page {historyPage} of {historyTotalPages}
                   </span>
-                  <button
+                  <Button
+                    variant="outline"
+                    size="sm"
                     onClick={() => loadHistory(historyPage + 1)}
                     disabled={historyPage >= historyTotalPages}
-                    className="px-4 py-2 text-sm border rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
                   >
                     Next
-                  </button>
+                  </Button>
                 </div>
               )}
             </>
           )}
         </div>
       )}
-    </div>
+    </DashboardLayout>
   )
 }

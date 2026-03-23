@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { requireAuth } from "@/lib/auth-helpers"
 import { writeFile, mkdir } from "fs/promises"
 import path from "path"
 
 // POST /api/videos/check-status - Check video generation status
 export async function POST(request: NextRequest) {
   try {
+    const authResult = await requireAuth()
+    if (authResult.error) return authResult.error
+    const { user } = authResult
+
     const { operationName, videoId } = await request.json()
 
     if (!operationName) {

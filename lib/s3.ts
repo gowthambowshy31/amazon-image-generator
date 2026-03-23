@@ -123,7 +123,10 @@ export function generateAmazonAccessPolicy(): object {
           "s3:GetObject",
           "s3:GetObjectVersion"
         ],
-        Resource: `arn:aws:s3:::${bucketName}/generated-images/*`
+        Resource: [
+          `arn:aws:s3:::${bucketName}/generated-images/*`,
+          `arn:aws:s3:::${bucketName}/external-uploads/*`
+        ]
       }
     ]
   }

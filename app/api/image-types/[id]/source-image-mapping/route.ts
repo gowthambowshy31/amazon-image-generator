@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { requireAuth } from "@/lib/auth-helpers"
 import { z } from "zod"
 
 interface RouteParams {
@@ -23,12 +24,11 @@ export async function POST(
   { params }: RouteParams
 ) {
   try {
-    const { id } = await params
+    const authResult = await requireAuth()
+    if (authResult.error) return authResult.error
+    const { user } = authResult
 
-    // Get default admin user for logging
-    const adminUser = await prisma.user.findFirst({
-      where: { role: 'ADMIN' }
-    })
+    const { id } = await params
 
     const body = await request.json()
     const { productId, sourceImageId } = mappingSchema.parse(body)
@@ -88,22 +88,20 @@ export async function POST(
     })
 
     // Log activity
-    if (adminUser) {
-      await prisma.activityLog.create({
-        data: {
-          userId: adminUser.id,
-          action: "SET_SOURCE_IMAGE_MAPPING",
-          entityType: "Product",
-          entityId: productId,
-          metadata: {
-            imageTypeId: id,
-            imageTypeName: imageType.name,
-            sourceImageId,
-            sourceImageVariant: sourceImage.variant
-          }
+    await prisma.activityLog.create({
+      data: {
+        userId: user.id,
+        action: "SET_SOURCE_IMAGE_MAPPING",
+        entityType: "Product",
+        entityId: productId,
+        metadata: {
+          imageTypeId: id,
+          imageTypeName: imageType.name,
+          sourceImageId,
+          sourceImageVariant: sourceImage.variant
         }
-      })
-    }
+      }
+    })
 
     return NextResponse.json({
       success: true,
@@ -138,6 +136,10 @@ export async function GET(
   { params }: RouteParams
 ) {
   try {
+    const authResult = await requireAuth()
+    if (authResult.error) return authResult.error
+    const { user } = authResult
+
     const { id } = await params
 
     const { searchParams } = new URL(request.url)

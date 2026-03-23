@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { requireAuth } from "@/lib/auth-helpers"
 import { z } from "zod"
 
 const createCommentSchema = z.object({
@@ -13,16 +14,11 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const authResult = await requireAuth()
+    if (authResult.error) return authResult.error
+    const { user } = authResult
+
     const { id } = await params
-
-    // Get default admin user
-    const adminUser = await prisma.user.findFirst({
-      where: { role: 'ADMIN' }
-    })
-
-    if (!adminUser) {
-      return NextResponse.json({ error: "No admin user found" }, { status: 500 })
-    }
 
     const body = await request.json()
     const validated = createCommentSchema.parse(body)
@@ -30,7 +26,7 @@ export async function POST(
     const comment = await prisma.comment.create({
       data: {
         imageId: id,
-        userId: adminUser.id,
+        userId: user.id,
         content: validated.content,
         issueTag: validated.issueTag
       },
@@ -68,6 +64,10 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const authResult = await requireAuth()
+    if (authResult.error) return authResult.error
+    const { user } = authResult
+
     const { id } = await params
 
     const comments = await prisma.comment.findMany({

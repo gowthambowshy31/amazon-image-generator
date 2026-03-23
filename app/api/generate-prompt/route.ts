@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { requireAuth } from "@/lib/auth-helpers"
 import { z } from "zod"
 import { generatePromptFromImage } from "@/lib/gemini"
 
@@ -78,6 +79,10 @@ function parseAnalysisResponse(text: string): AnalysisResult {
 
 export async function POST(request: NextRequest) {
   try {
+    const authResult = await requireAuth()
+    if (authResult.error) return authResult.error
+    const { user } = authResult
+
     const body = await request.json()
     const validated = requestSchema.parse(body)
 

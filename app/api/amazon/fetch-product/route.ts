@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { getAmazonSPClient } from "@/lib/amazon-sp"
 import { downloadAndStoreImage } from "@/lib/image-storage"
+import { requireAuth } from "@/lib/auth-helpers"
 import { z } from "zod"
 
 const fetchProductSchema = z.object({
@@ -15,6 +16,10 @@ const fetchProductSchema = z.object({
  */
 export async function POST(request: NextRequest) {
   try {
+    const authResult = await requireAuth()
+    if (authResult.error) return authResult.error
+    const { user } = authResult
+
     const body = await request.json()
     const { asin, autoCreateProduct } = fetchProductSchema.parse(body)
 
@@ -39,11 +44,6 @@ export async function POST(request: NextRequest) {
 
     // Create product if requested and doesn't exist
     if (!product && autoCreateProduct) {
-      // Get default admin user
-      const adminUser = await prisma.user.findFirst({
-        where: { role: 'ADMIN' }
-      })
-
       // Try to get the Seller SKU from Amazon inventory
       let sellerSku: string | null = null
       try {
@@ -64,28 +64,26 @@ export async function POST(request: NextRequest) {
             ...(sellerSku ? { sku: sellerSku } : {}),
             attributes: amazonProduct.attributes
           },
-          createdById: adminUser?.id || 'system'
+          createdById: user.id
         },
         include: {
           sourceImages: true
         }
       })
 
-      // Log activity (optional)
-      if (adminUser) {
-        await prisma.activityLog.create({
-          data: {
-            userId: adminUser.id,
-            action: "FETCH_AMAZON_PRODUCT",
-            entityType: "Product",
-            entityId: product.id,
-            metadata: {
-              asin,
-              title: amazonProduct.title
-            }
+      // Log activity
+      await prisma.activityLog.create({
+        data: {
+          userId: user.id,
+          action: "FETCH_AMAZON_PRODUCT",
+          entityType: "Product",
+          entityId: product.id,
+          metadata: {
+            asin,
+            title: amazonProduct.title
           }
-        })
-      }
+        }
+      })
     }
 
     // Download and store source images if product exists

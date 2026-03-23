@@ -1,6 +1,8 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 
 interface GeneratedImage {
   id: string
@@ -198,14 +200,14 @@ export default function AmazonImagePush({
   // If no ASIN, show warning
   if (!productAsin) {
     return (
-      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+      <div className="bg-warning/10 border border-warning/30 rounded-lg p-4">
         <div className="flex items-start gap-3">
-          <svg className="w-5 h-5 text-yellow-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-5 h-5 text-warning mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
           </svg>
           <div>
-            <h3 className="font-semibold text-yellow-800">No ASIN Found</h3>
-            <p className="text-yellow-700 text-sm mt-1">
+            <h3 className="font-semibold text-warning">No ASIN Found</h3>
+            <p className="text-warning text-sm mt-1">
               This product doesn't have an ASIN. Images cannot be pushed to Amazon without an ASIN.
               Import this product from Amazon or add the ASIN manually.
             </p>
@@ -218,14 +220,14 @@ export default function AmazonImagePush({
   // If no approved images, show message
   if (approvedImages.length === 0) {
     return (
-      <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+      <div className="bg-background border border-border rounded-lg p-4">
         <div className="flex items-start gap-3">
-          <svg className="w-5 h-5 text-gray-500 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-5 h-5 text-muted-foreground mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
           </svg>
           <div>
-            <h3 className="font-semibold text-gray-700">No Approved Images</h3>
-            <p className="text-gray-600 text-sm mt-1">
+            <h3 className="font-semibold text-muted-foreground">No Approved Images</h3>
+            <p className="text-muted-foreground text-sm mt-1">
               Approve generated images before pushing them to Amazon.
               Only images with "APPROVED" status can be pushed.
             </p>
@@ -240,80 +242,82 @@ export default function AmazonImagePush({
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-            <svg className="w-5 h-5 text-orange-500" viewBox="0 0 24 24" fill="currentColor">
+          <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
+            <svg className="w-5 h-5 text-warning" viewBox="0 0 24 24" fill="currentColor">
               <path d="M12.5 2C6.81 2 2 6.81 2 12.5c0 4.73 3.21 8.71 7.56 9.89.07.01.13.01.19.01.41 0 .56-.31.56-.57v-2.04c-.83.18-1.21-.39-1.29-.39-.15-.37-.36-.65-.62-.84-.26-.19-.39-.31-.39-.31-.31-.22.02-.22.07-.22.35.03.64.18.87.4.24.22.4.5.47.81.12.56.42 1.02.87 1.29.45.27.97.33 1.46.17.04-.35.18-.67.41-.92-.19-.04-.37-.1-.54-.16-2.29-.69-3.36-2.41-3.36-4.33 0-.81.26-1.57.74-2.22-.07-.23-.31-1.01.07-2.11 0 0 .02 0 .05-.01.03-.01.11-.01.23-.01.31 0 .89.11 1.77.73.5-.14 1.04-.21 1.58-.21s1.08.07 1.58.21c.88-.62 1.46-.73 1.77-.73.12 0 .2 0 .23.01.03.01.05.01.05.01.38 1.1.14 1.88.07 2.11.48.65.74 1.41.74 2.22 0 1.92-1.07 3.64-3.36 4.33-.17.06-.35.12-.54.16.28.31.42.71.42 1.14v2.26c0 .26.15.57.56.57.06 0 .12 0 .19-.01C18.79 21.21 22 17.23 22 12.5 22 6.81 17.19 2 12.5 2z"/>
             </svg>
             Push to Amazon
           </h3>
-          <p className="text-sm text-gray-500 mt-1">
+          <p className="text-sm text-muted-foreground mt-1">
             ASIN: <span className="font-mono font-medium">{productAsin}</span>
           </p>
         </div>
 
         {pushHistory.length > 0 && (
-          <button
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => setShowHistory(!showHistory)}
-            className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1"
+            className="text-primary hover:text-primary flex items-center gap-1"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             {showHistory ? 'Hide' : 'Show'} History ({pushHistory.length})
-          </button>
+          </Button>
         )}
       </div>
 
       {/* Error/Success Messages */}
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-start gap-2">
-          <svg className="w-5 h-5 text-red-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-3 flex items-start gap-2">
+          <svg className="w-5 h-5 text-destructive shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          <p className="text-red-800 text-sm">{error}</p>
+          <p className="text-destructive text-sm">{error}</p>
         </div>
       )}
 
       {success && (
-        <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex items-start gap-2">
-          <svg className="w-5 h-5 text-green-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div className="bg-success/10 border border-success/30 rounded-lg p-3 flex items-start gap-2">
+          <svg className="w-5 h-5 text-success shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          <p className="text-green-800 text-sm">{success}</p>
+          <p className="text-success text-sm">{success}</p>
         </div>
       )}
 
       {/* Push History (collapsible) */}
       {showHistory && pushHistory.length > 0 && (
-        <div className="bg-gray-50 rounded-lg p-3">
-          <h4 className="text-sm font-semibold text-gray-700 mb-2">Recent Push History</h4>
+        <div className="bg-background rounded-lg p-3">
+          <h4 className="text-sm font-semibold text-muted-foreground mb-2">Recent Push History</h4>
           <div className="space-y-2 max-h-40 overflow-y-auto">
             {pushHistory.slice(0, 10).map((record) => (
               <div
                 key={record.id}
-                className="flex items-center justify-between text-xs bg-white p-2 rounded border"
+                className="flex items-center justify-between text-xs bg-secondary/30 p-2 rounded border border-border"
               >
                 <div className="flex items-center gap-2">
-                  <span className={`px-1.5 py-0.5 rounded font-medium ${
-                    record.amazonSlot === 'MAIN' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-700'
-                  }`}>
+                  <Badge variant="secondary" className={
+                    record.amazonSlot === 'MAIN' ? 'bg-violet-500/20 text-violet-400' : 'bg-muted text-muted-foreground'
+                  }>
                     {record.amazonSlot}
-                  </span>
-                  <span className="text-gray-600 truncate max-w-[150px]">
+                  </Badge>
+                  <span className="text-muted-foreground truncate max-w-[150px]">
                     {record.generatedImage?.name || 'Unknown Image'}
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-gray-400">
+                  <span className="text-muted-foreground">
                     {new Date(record.createdAt).toLocaleDateString()}
                   </span>
-                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
-                    record.status === 'SUCCESS' ? 'bg-green-100 text-green-700' :
-                    record.status === 'FAILED' ? 'bg-red-100 text-red-700' :
-                    'bg-yellow-100 text-yellow-700'
+                  <Badge variant="secondary" className={`text-[10px] font-semibold ${
+                    record.status === 'SUCCESS' ? 'bg-success/20 text-success' :
+                    record.status === 'FAILED' ? 'bg-destructive/20 text-destructive' :
+                    'bg-warning/20 text-warning'
                   }`}>
                     {record.status}
-                  </span>
+                  </Badge>
                 </div>
               </div>
             ))}
@@ -323,7 +327,7 @@ export default function AmazonImagePush({
 
       {/* Image Selection Grid */}
       <div className="space-y-3">
-        <p className="text-sm text-gray-600">
+        <p className="text-sm text-muted-foreground">
           Select approved images and assign them to Amazon image slots:
         </p>
 
@@ -336,12 +340,12 @@ export default function AmazonImagePush({
               key={image.id}
               className={`flex items-center gap-4 p-3 border rounded-lg transition ${
                 isSelected
-                  ? 'border-orange-400 bg-orange-50'
-                  : 'border-gray-200 hover:border-gray-300'
+                  ? 'border-warning bg-warning/10'
+                  : 'border-border hover:border-input'
               }`}
             >
               {/* Image Preview */}
-              <div className="w-16 h-16 bg-gray-100 rounded overflow-hidden shrink-0">
+              <div className="w-16 h-16 bg-accent rounded overflow-hidden shrink-0">
                 <img
                   src={getImageUrl(image)}
                   alt={getImageName(image)}
@@ -351,19 +355,19 @@ export default function AmazonImagePush({
 
               {/* Image Info */}
               <div className="flex-1 min-w-0">
-                <p className="font-medium text-gray-900 text-sm truncate">
+                <p className="font-medium text-foreground text-sm truncate">
                   {getImageName(image)}
                 </p>
                 {image.amazonPushedAt && (
-                  <p className="text-xs text-gray-500 mt-0.5">
+                  <p className="text-xs text-muted-foreground mt-0.5">
                     Last pushed: {new Date(image.amazonPushedAt).toLocaleString()}
                     {image.amazonSlot && (
-                      <span className="ml-1 text-purple-600">({image.amazonSlot})</span>
+                      <span className="ml-1 text-violet-400">({image.amazonSlot})</span>
                     )}
                   </p>
                 )}
                 {image.amazonPushStatus === 'SUCCESS' && (
-                  <span className="inline-flex items-center text-xs text-green-600 mt-1">
+                  <span className="inline-flex items-center text-xs text-success mt-1">
                     <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                     </svg>
@@ -379,8 +383,8 @@ export default function AmazonImagePush({
                 disabled={pushing || unapprovingId === image.id}
                 className={`border rounded-lg px-3 py-2 text-sm min-w-[140px] ${
                   isSelected
-                    ? 'border-orange-400 bg-white'
-                    : 'border-gray-300'
+                    ? 'border-warning bg-secondary/30'
+                    : 'border-input'
                 } disabled:opacity-50 disabled:cursor-not-allowed`}
               >
                 <option value="">Select slot...</option>
@@ -401,43 +405,43 @@ export default function AmazonImagePush({
               </select>
 
               {/* Unapprove Button */}
-              <button
+              <Button
+                variant="ghost"
+                size="icon"
                 onClick={() => handleUnapprove(image.id)}
                 disabled={pushing || unapprovingId === image.id}
-                className="p-2 text-gray-400 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+                className="text-muted-foreground hover:text-warning hover:bg-warning/10"
                 title="Unapprove image"
               >
                 {unapprovingId === image.id ? (
-                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-orange-600 border-t-transparent"></div>
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-warning border-t-transparent"></div>
                 ) : (
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 )}
-              </button>
+              </Button>
             </div>
           )
         })}
       </div>
 
       {/* Footer with Push Button */}
-      <div className="flex justify-between items-center pt-4 border-t">
-        <p className="text-sm text-gray-500">
+      <div className="flex justify-between items-center pt-4 border-t border-border">
+        <p className="text-sm text-muted-foreground">
           {selectedImages.size === 0 ? (
             'No images selected'
           ) : (
-            <span className="text-orange-600 font-medium">
+            <span className="text-warning font-medium">
               {selectedImages.size} image{selectedImages.size > 1 ? 's' : ''} selected
             </span>
           )}
         </p>
 
-        <button
+        <Button
           onClick={handlePush}
           disabled={pushing || selectedImages.size === 0}
-          className="px-6 py-2.5 bg-orange-600 text-white rounded-lg hover:bg-orange-700
-                     transition disabled:opacity-50 disabled:cursor-not-allowed
-                     flex items-center gap-2 font-medium"
+          className="bg-orange-600 text-white hover:bg-orange-500 flex items-center gap-2 font-medium px-6"
         >
           {pushing ? (
             <>
@@ -452,13 +456,13 @@ export default function AmazonImagePush({
               Push to Amazon
             </>
           )}
-        </button>
+        </Button>
       </div>
 
       {/* Info Box */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-800">
+      <div className="bg-primary/10 border border-primary/30 rounded-lg p-3 text-xs text-primary">
         <p className="font-medium mb-1">How it works:</p>
-        <ul className="list-disc list-inside space-y-0.5 text-blue-700">
+        <ul className="list-disc list-inside space-y-0.5 text-primary">
           <li>Select images and assign them to Amazon image slots (MAIN = primary image)</li>
           <li>Click "Push to Amazon" to update your listing images</li>
           <li>Amazon may take a few minutes to process and display the new images</li>

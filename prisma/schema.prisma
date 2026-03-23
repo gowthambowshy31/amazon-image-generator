@@ -9,21 +9,58 @@ datasource db {
   provider = "postgresql"
 }
 
+// Organization (Tenant) - one per Amazon store/company
+model Organization {
+  id              String    @id @default(cuid())
+  name            String
+  slug            String    @unique
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  users              User[]
+  products           Product[]
+  amazonConnections  AmazonConnection[]
+}
+
+// Amazon OAuth Connection - per-org Amazon seller credentials
+model AmazonConnection {
+  id              String    @id @default(cuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sellerId        String
+  marketplaceId   String    @default("ATVPDKIKX0DER")
+  region          String    @default("na")
+  refreshToken    String    @db.Text  // encrypted
+  accessToken     String?   @db.Text
+  tokenExpiresAt  DateTime?
+  storeName       String?
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([organizationId, sellerId])
+  @@index([organizationId])
+}
+
 // User Management
 model User {
-  id            String    @id @default(cuid())
-  email         String    @unique
-  name          String?
-  password      String
-  role          UserRole  @default(CLIENT)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id              String    @id @default(cuid())
+  email           String    @unique
+  name            String?
+  password        String
+  role            UserRole  @default(CLIENT)
+  organizationId  String?
+  organization    Organization? @relation(fields: [organizationId], references: [id])
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   products      Product[]
   images        GeneratedImage[]
   videos        GeneratedVideo[]
   comments      Comment[]
   activityLogs  ActivityLog[]
+
+  @@index([organizationId])
 }
 
 enum UserRole {
@@ -45,6 +82,8 @@ model Product {
   originalImageUrl String?
   createdById     String
   createdBy       User      @relation(fields: [createdById], references: [id])
+  organizationId  String?
+  organization    Organization? @relation(fields: [organizationId], references: [id])
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
@@ -54,6 +93,8 @@ model Product {
   videoPromptOverrides VideoPromptOverride[]
   sourceImages        SourceImage[]
   amazonImagePushHistory AmazonImagePush[]
+
+  @@index([organizationId])
 }
 
 // Source Images from Amazon

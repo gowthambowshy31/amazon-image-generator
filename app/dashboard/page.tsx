@@ -2,12 +2,18 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
+import DashboardLayout from "@/app/components/DashboardLayout"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 
 interface Product {
   id: string
   title: string
   asin?: string
-  status: string
   category?: string
   images: any[]
   sourceImages?: any[]
@@ -31,7 +37,6 @@ export default function DashboardPage() {
   const [analytics, setAnalytics] = useState<Analytics | null>(null)
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
-  const [statusFilter, setStatusFilter] = useState<string>("ALL")
   const [categoryFilter, setCategoryFilter] = useState<string>("ALL")
   const [sourceFilter, setSourceFilter] = useState<string>("ALL")
   const [deletingProductId, setDeletingProductId] = useState<string | null>(null)
@@ -147,27 +152,13 @@ export default function DashboardPage() {
     }
   }
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'COMPLETED': return 'bg-green-100 text-green-800'
-      case 'IN_PROGRESS': return 'bg-yellow-100 text-yellow-800'
-      case 'NOT_STARTED': return 'bg-gray-100 text-gray-800'
-      default: return 'bg-gray-100 text-gray-800'
-    }
-  }
-
-  const getProductProgress = (product: Product) => {
-    const approvedImages = product.images.filter((img: any) => img.status === 'APPROVED').length
-    const totalImages = product.images.length
-    return totalImages > 0 ? (approvedImages / totalImages) * 100 : 0
-  }
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading dashboard...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+          <p className="mt-4 text-muted-foreground">Loading dashboard...</p>
         </div>
       </div>
     )
@@ -199,7 +190,6 @@ export default function DashboardPage() {
       product.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (product.asin && product.asin.toLowerCase().includes(searchTerm.toLowerCase()))
 
-    const matchesStatus = statusFilter === "ALL" || product.status === statusFilter
     const matchesCategory = categoryFilter === "ALL" || product.category === categoryFilter
 
     const matchesSource =
@@ -207,150 +197,83 @@ export default function DashboardPage() {
       (sourceFilter === "AMAZON" && isAmazonProduct(product)) ||
       (sourceFilter === "MANUAL" && isManualProduct(product))
 
-    return matchesSearch && matchesStatus && matchesCategory && matchesSource
+    return matchesSearch && matchesCategory && matchesSource
   })
 
   // Get unique categories for filter dropdown
   const uniqueCategories = Array.from(new Set(products.map(p => p.category).filter(Boolean)))
 
-  const notStartedCount = products.filter(p => p.status === 'NOT_STARTED').length
-  const inProgressCount = products.filter(p => p.status === 'IN_PROGRESS').length
-  const completedCount = products.filter(p => p.status === 'COMPLETED').length
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex justify-between items-center">
-            <h1 className="text-2xl font-bold text-gray-900">Amazon Product Image Generator</h1>
-            <div className="flex gap-3">
-              <Link
-                href="/products/new"
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-              >
-                Add Product
-              </Link>
-              <Link
-                href="/bulk-generate"
-                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
-              >
-                Bulk Generate
-              </Link>
-              <Link
-                href="/templates"
-                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition"
-              >
-                Prompt Templates
-              </Link>
-              <Link
-                href="/prompt-generator"
-                className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition"
-              >
-                Prompt from Image
-              </Link>
-              <Link
-                href="/image-types"
-                className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition"
-              >
-                Manage Image Types
-              </Link>
-              <Link
-                href="/admin/setup"
-                className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition"
-              >
-                Admin Setup
-              </Link>
-            </div>
-          </div>
-        </div>
-      </header>
-
+    <DashboardLayout>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Page Header */}
+        <div className="mb-8">
+          <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
+          <p className="text-sm text-muted-foreground mt-1">Overview of your products and image generation</p>
+        </div>
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <div className="bg-white rounded-lg shadow p-6">
-            <h3 className="text-sm font-medium text-gray-500">Total Products</h3>
-            <p className="text-3xl font-bold text-gray-900 mt-2">{products.length}</p>
-          </div>
-          <div className="bg-white rounded-lg shadow p-6">
-            <h3 className="text-sm font-medium text-gray-500">Not Started</h3>
-            <p className="text-3xl font-bold text-gray-600 mt-2">{notStartedCount}</p>
-          </div>
-          <div className="bg-white rounded-lg shadow p-6">
-            <h3 className="text-sm font-medium text-gray-500">In Progress</h3>
-            <p className="text-3xl font-bold text-yellow-600 mt-2">{inProgressCount}</p>
-          </div>
-          <div className="bg-white rounded-lg shadow p-6">
-            <h3 className="text-sm font-medium text-gray-500">Completed</h3>
-            <p className="text-3xl font-bold text-green-600 mt-2">{completedCount}</p>
-          </div>
+        <div className="grid grid-cols-1 md:grid-cols-1 gap-6 mb-8">
+          <Card>
+            <CardContent className="p-6">
+              <h3 className="text-sm font-medium text-muted-foreground">Total Products</h3>
+              <p className="text-3xl font-bold text-foreground mt-2">{products.length}</p>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Analytics */}
         {analytics && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            <div className="bg-white rounded-lg shadow p-6">
-              <h3 className="text-sm font-medium text-gray-500">Images Generated</h3>
-              <p className="text-3xl font-bold text-blue-600 mt-2">{analytics.imagesGenerated}</p>
-            </div>
-            <div className="bg-white rounded-lg shadow p-6">
-              <h3 className="text-sm font-medium text-gray-500">Images Approved</h3>
-              <p className="text-3xl font-bold text-green-600 mt-2">{analytics.imagesApproved}</p>
-            </div>
-            <div className="bg-white rounded-lg shadow p-6">
-              <h3 className="text-sm font-medium text-gray-500">Images Rejected</h3>
-              <p className="text-3xl font-bold text-red-600 mt-2">{analytics.imagesRejected}</p>
-            </div>
+            <Card>
+              <CardContent className="p-6">
+                <h3 className="text-sm font-medium text-muted-foreground">Images Generated</h3>
+                <p className="text-3xl font-bold text-info mt-2">{analytics.imagesGenerated}</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-6">
+                <h3 className="text-sm font-medium text-muted-foreground">Images Approved</h3>
+                <p className="text-3xl font-bold text-success mt-2">{analytics.imagesApproved}</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-6">
+                <h3 className="text-sm font-medium text-muted-foreground">Images Rejected</h3>
+                <p className="text-3xl font-bold text-destructive mt-2">{analytics.imagesRejected}</p>
+              </CardContent>
+            </Card>
           </div>
         )}
 
         {/* Search and Filter Section */}
-        <div className="bg-white rounded-lg shadow mb-6 p-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card className="mb-6">
+          <CardContent className="p-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {/* Search Input */}
             <div>
-              <label htmlFor="search" className="block text-sm font-medium text-gray-700 mb-2">
+              <Label htmlFor="search" className="block text-sm font-medium text-foreground mb-2">
                 Search Products
-              </label>
-              <input
+              </Label>
+              <Input
                 type="text"
                 id="search"
                 placeholder="Search by title or ASIN..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
-            </div>
-
-            {/* Status Filter */}
-            <div>
-              <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-2">
-                Filter by Status
-              </label>
-              <select
-                id="status"
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="ALL">All Statuses</option>
-                <option value="NOT_STARTED">Not Started</option>
-                <option value="IN_PROGRESS">In Progress</option>
-                <option value="COMPLETED">Completed</option>
-              </select>
             </div>
 
             {/* Category Filter */}
             <div>
-              <label htmlFor="category" className="block text-sm font-medium text-gray-700 mb-2">
+              <Label htmlFor="category" className="block text-sm font-medium text-foreground mb-2">
                 Filter by Category
-              </label>
+              </Label>
               <select
                 id="category"
                 value={categoryFilter}
                 onChange={(e) => setCategoryFilter(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="flex h-9 w-full rounded-md border border-input bg-secondary px-3 py-2 text-sm text-foreground"
               >
                 <option value="ALL">All Categories</option>
                 {uniqueCategories.map((cat) => (
@@ -363,14 +286,14 @@ export default function DashboardPage() {
 
             {/* Source Filter */}
             <div>
-              <label htmlFor="source" className="block text-sm font-medium text-gray-700 mb-2">
+              <Label htmlFor="source" className="block text-sm font-medium text-foreground mb-2">
                 Filter by Source
-              </label>
+              </Label>
               <select
                 id="source"
                 value={sourceFilter}
                 onChange={(e) => setSourceFilter(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="flex h-9 w-full rounded-md border border-input bg-secondary px-3 py-2 text-sm text-foreground"
               >
                 <option value="ALL">All Sources</option>
                 <option value="AMAZON">Amazon Import</option>
@@ -380,98 +303,88 @@ export default function DashboardPage() {
           </div>
 
           {/* Active Filters Display and Clear Button */}
-          {(searchTerm || statusFilter !== "ALL" || categoryFilter !== "ALL" || sourceFilter !== "ALL") && (
+          {(searchTerm || categoryFilter !== "ALL" || sourceFilter !== "ALL") && (
             <div className="mt-4 flex items-center justify-between">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-sm text-gray-600">Active filters:</span>
+                <span className="text-sm text-muted-foreground">Active filters:</span>
                 {searchTerm && (
-                  <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm flex items-center gap-1">
-                    Search: "{searchTerm}"
+                  <Badge variant="secondary" className="flex items-center gap-1">
+                    Search: &quot;{searchTerm}&quot;
                     <button
                       onClick={() => setSearchTerm("")}
-                      className="ml-1 hover:text-blue-900"
+                      className="ml-1 hover:text-primary"
                     >
                       ×
                     </button>
-                  </span>
-                )}
-                {statusFilter !== "ALL" && (
-                  <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm flex items-center gap-1">
-                    Status: {statusFilter.replace('_', ' ')}
-                    <button
-                      onClick={() => setStatusFilter("ALL")}
-                      className="ml-1 hover:text-blue-900"
-                    >
-                      ×
-                    </button>
-                  </span>
+                  </Badge>
                 )}
                 {categoryFilter !== "ALL" && (
-                  <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm flex items-center gap-1">
+                  <Badge variant="secondary" className="flex items-center gap-1">
                     Category: {categoryFilter}
                     <button
                       onClick={() => setCategoryFilter("ALL")}
-                      className="ml-1 hover:text-blue-900"
+                      className="ml-1 hover:text-primary"
                     >
                       ×
                     </button>
-                  </span>
+                  </Badge>
                 )}
                 {sourceFilter !== "ALL" && (
-                  <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm flex items-center gap-1">
+                  <Badge variant="secondary" className="flex items-center gap-1">
                     Source: {sourceFilter === "AMAZON" ? "Amazon Import" : "Manual Entry"}
                     <button
                       onClick={() => setSourceFilter("ALL")}
-                      className="ml-1 hover:text-blue-900"
+                      className="ml-1 hover:text-primary"
                     >
                       ×
                     </button>
-                  </span>
+                  </Badge>
                 )}
               </div>
-              <button
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => {
                   setSearchTerm("")
-                  setStatusFilter("ALL")
                   setCategoryFilter("ALL")
                   setSourceFilter("ALL")
                 }}
-                className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition"
               >
                 Clear All Filters
-              </button>
+              </Button>
             </div>
           )}
 
           {/* Results Count */}
-          <div className="mt-4 text-sm text-gray-600">
+          <div className="mt-4 text-sm text-muted-foreground">
             Showing {filteredProducts.length} of {products.length} products
           </div>
-        </div>
+          </CardContent>
+        </Card>
 
         {/* Products Table */}
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-            <h2 className="text-lg font-semibold text-gray-900">Products</h2>
+        <Card className="overflow-hidden">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle>Products</CardTitle>
             {/* Bulk Download Controls */}
             {selectedProducts.size > 0 && (
               <div className="flex items-center gap-3">
-                <span className="text-sm text-gray-600">
+                <span className="text-sm text-muted-foreground">
                   {selectedProducts.size} selected
                 </span>
                 <select
                   value={bulkDownloadType}
                   onChange={(e) => setBulkDownloadType(e.target.value as 'source' | 'generated' | 'all')}
-                  className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="flex h-9 w-full rounded-md border border-input bg-secondary px-3 py-2 text-sm text-foreground"
                 >
                   <option value="generated">Generated Images</option>
                   <option value="source">Source Images</option>
                   <option value="all">All Images</option>
                 </select>
-                <button
+                <Button
                   onClick={downloadSelectedImages}
                   disabled={downloadingBulk}
-                  className="flex items-center gap-2 px-4 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
+                  size="sm"
                 >
                   {downloadingBulk ? (
                     <>
@@ -486,62 +399,47 @@ export default function DashboardPage() {
                       Download Selected
                     </>
                   )}
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onClick={() => setSelectedProducts(new Set())}
-                  className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition"
                 >
                   Clear Selection
-                </button>
+                </Button>
               </div>
             )}
-          </div>
+          </CardHeader>
+          <CardContent className="p-0">
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-10">
                     <input
                       type="checkbox"
                       checked={selectedProducts.size === filteredProducts.length && filteredProducts.length > 0}
                       onChange={toggleSelectAll}
-                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      className="w-4 h-4 rounded"
                       title="Select all"
                     />
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Product
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    ASIN
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Category
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Inventory
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Source Images
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Generated
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
+                  </TableHead>
+                  <TableHead>Product</TableHead>
+                  <TableHead>ASIN</TableHead>
+                  <TableHead>Category</TableHead>
+                  <TableHead>Inventory</TableHead>
+                  <TableHead>Source Images</TableHead>
+                  <TableHead>Generated</TableHead>
+                  <TableHead>Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {filteredProducts.length === 0 ? (
-                  <tr>
-                    <td colSpan={9} className="px-6 py-12 text-center">
-                      <div className="text-gray-500">
+                  <TableRow>
+                    <TableCell colSpan={8} className="px-6 py-12 text-center">
+                      <div className="text-muted-foreground">
                         <svg
-                          className="mx-auto h-12 w-12 text-gray-400"
+                          className="mx-auto h-12 w-12 text-muted-foreground"
                           fill="none"
                           viewBox="0 0 24 24"
                           stroke="currentColor"
@@ -554,97 +452,89 @@ export default function DashboardPage() {
                             d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
                           />
                         </svg>
-                        <h3 className="mt-2 text-sm font-medium text-gray-900">No products found</h3>
-                        <p className="mt-1 text-sm text-gray-500">
+                        <h3 className="mt-2 text-sm font-medium text-foreground">No products found</h3>
+                        <p className="mt-1 text-sm text-muted-foreground">
                           Try adjusting your search or filter criteria
                         </p>
                       </div>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ) : (
                   filteredProducts.map((product) => (
-                  <tr key={product.id} className={`hover:bg-gray-50 ${selectedProducts.has(product.id) ? 'bg-blue-50' : ''}`}>
-                    <td className="px-4 py-4">
+                  <TableRow key={product.id} className={`hover:bg-muted/50 ${selectedProducts.has(product.id) ? 'bg-primary/10' : ''}`}>
+                    <TableCell className="px-4 py-4">
                       <input
                         type="checkbox"
                         checked={selectedProducts.has(product.id)}
                         onChange={() => toggleProductSelection(product.id)}
-                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                        className="w-4 h-4 rounded"
                       />
-                    </td>
-                    <td className="px-6 py-4">
+                    </TableCell>
+                    <TableCell className="px-6 py-4">
                       <div className="flex items-center gap-2">
-                        <div className="text-sm font-medium text-gray-900">{product.title}</div>
+                        <div className="text-sm font-medium text-foreground">{product.title}</div>
                         <div className="flex gap-1">
                           {isAmazonProduct(product) && (
-                            <span className="px-2 py-0.5 bg-orange-100 text-orange-700 text-xs font-medium rounded">
-                              Amazon
-                            </span>
+                            <Badge variant="warning">Amazon</Badge>
                           )}
                           {isNewProduct(product) && (
-                            <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs font-medium rounded">
-                              NEW
-                            </span>
+                            <Badge variant="success">NEW</Badge>
                           )}
                         </div>
                       </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-500">{product.asin || '-'}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-500">{product.category || '-'}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(product.status)}`}>
-                        {product.status.replace('_', ' ')}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      <span className="font-semibold text-blue-600">
+                    </TableCell>
+                    <TableCell className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-muted-foreground">{product.asin || '-'}</div>
+                    </TableCell>
+                    <TableCell className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-muted-foreground">{product.category || '-'}</div>
+                    </TableCell>
+                    <TableCell className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
+                      <span className="font-semibold text-info">
                         {(product.metadata as any)?.quantity ?? (product.metadata as any)?.inventory?.quantity ?? 0}
                       </span> units
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    </TableCell>
+                    <TableCell className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
                       {product._count.sourceImages} images
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    </TableCell>
+                    <TableCell className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
                       {product._count.images} images
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <div className="flex items-center gap-3">
-                        <Link
-                          href={`/products/${product.id}`}
-                          className="text-blue-600 hover:text-blue-900"
-                        >
-                          View
-                        </Link>
-                        <Link
-                          href={`/products/${product.id}/generate`}
-                          className="text-green-600 hover:text-green-900"
-                        >
-                          Generate
-                        </Link>
+                    </TableCell>
+                    <TableCell className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <div className="flex items-center gap-1">
+                        <Button variant="ghost" size="sm" asChild>
+                          <Link href={`/products/${product.id}`}>
+                            View
+                          </Link>
+                        </Button>
+                        <Button variant="ghost" size="sm" asChild className="text-success hover:text-success">
+                          <Link href={`/products/${product.id}/generate`}>
+                            Generate
+                          </Link>
+                        </Button>
                         {isManualProduct(product) && (
-                          <button
+                          <Button
+                            variant="ghost"
+                            size="sm"
                             onClick={() => handleDeleteProduct(product.id)}
                             disabled={deletingProductId === product.id}
-                            className="text-red-600 hover:text-red-900 disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="text-destructive hover:text-destructive disabled:opacity-50 disabled:cursor-not-allowed"
                             title="Delete product"
                           >
                             {deletingProductId === product.id ? 'Deleting...' : 'Delete'}
-                          </button>
+                          </Button>
                         )}
                       </div>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                   ))
                 )}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
-        </div>
+          </CardContent>
+        </Card>
       </div>
-    </div>
+    </DashboardLayout>
   )
 }

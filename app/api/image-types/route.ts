@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { requireAuth } from "@/lib/auth-helpers"
 import { z } from "zod"
 
 const createImageTypeSchema = z.object({
@@ -12,6 +13,10 @@ const createImageTypeSchema = z.object({
 // GET /api/image-types - List all image types
 export async function GET(request: NextRequest) {
   try {
+    const authResult = await requireAuth()
+    if (authResult.error) return authResult.error
+    const { user } = authResult
+
     const imageTypes = await prisma.imageType.findMany({
       orderBy: {
         order: 'asc'
@@ -39,6 +44,10 @@ export async function GET(request: NextRequest) {
 // POST /api/image-types - Create a new image type
 export async function POST(request: NextRequest) {
   try {
+    const authResult = await requireAuth()
+    if (authResult.error) return authResult.error
+    const { user } = authResult
+
     const body = await request.json()
     const validated = createImageTypeSchema.parse(body)
 
@@ -57,23 +66,18 @@ export async function POST(request: NextRequest) {
       }
     })
 
-    // Log activity with default admin user
-    const adminUser = await prisma.user.findFirst({
-      where: { role: 'ADMIN' }
-    })
-    if (adminUser) {
-      await prisma.activityLog.create({
-        data: {
-          userId: adminUser.id,
-          action: "CREATE_IMAGE_TYPE",
-          entityType: "ImageType",
-          entityId: imageType.id,
-          metadata: {
-            name: imageType.name
-          }
+    // Log activity
+    await prisma.activityLog.create({
+      data: {
+        userId: user.id,
+        action: "CREATE_IMAGE_TYPE",
+        entityType: "ImageType",
+        entityId: imageType.id,
+        metadata: {
+          name: imageType.name
         }
-      })
-    }
+      }
+    })
 
     return NextResponse.json(imageType, { status: 201 })
   } catch (error) {

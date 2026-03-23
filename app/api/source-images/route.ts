@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { requireAuth } from "@/lib/auth-helpers"
 import { z } from "zod"
 
 const createSourceImageSchema = z.object({
@@ -15,6 +16,10 @@ const createSourceImageSchema = z.object({
 // POST /api/source-images - Create a source image
 export async function POST(request: NextRequest) {
   try {
+    const authResult = await requireAuth()
+    if (authResult.error) return authResult.error
+    const { user } = authResult
+
     const body = await request.json()
     console.log("Creating source image with data:", body)
 

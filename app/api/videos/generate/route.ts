@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { requireAuth } from "@/lib/auth-helpers"
 import { z } from "zod"
 import path from "path"
 
@@ -18,13 +19,12 @@ const generateVideoSchema = z.object({
 // POST /api/videos/generate - Generate a product video
 export async function POST(request: NextRequest) {
   try {
+    const authResult = await requireAuth()
+    if (authResult.error) return authResult.error
+    const { user } = authResult
+
     const body = await request.json()
     const validated = generateVideoSchema.parse(body)
-
-    // Get default admin user for logging
-    const adminUser = await prisma.user.findFirst({
-      where: { role: 'ADMIN' }
-    })
 
     // Get product
     const product = await prisma.product.findUnique({
@@ -155,26 +155,24 @@ export async function POST(request: NextRequest) {
         aspectRatio: validated.aspectRatio,
         durationSeconds: validated.durationSeconds,
         resolution: validated.resolution,
-        generatedById: adminUser?.id || 'system'
+        generatedById: user.id
       }
     })
 
     // Log activity
-    if (adminUser) {
-      await prisma.activityLog.create({
-        data: {
-          userId: adminUser.id,
-          action: "GENERATE_VIDEO",
-          entityType: "GeneratedVideo",
-          entityId: videoRecord.id,
-          metadata: {
-            productId: product.id,
-            productTitle: product.title,
-            operationName
-          }
+    await prisma.activityLog.create({
+      data: {
+        userId: user.id,
+        action: "GENERATE_VIDEO",
+        entityType: "GeneratedVideo",
+        entityId: videoRecord.id,
+        metadata: {
+          productId: product.id,
+          productTitle: product.title,
+          operationName
         }
-      })
-    }
+      }
+    })
 
     return NextResponse.json({
       success: true,

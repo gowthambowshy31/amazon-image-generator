@@ -2,9 +2,14 @@ import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { AmazonSPService } from "@/lib/amazon-sp"
 import { downloadAndStoreImage } from "@/lib/image-storage"
+import { requireAuth } from "@/lib/auth-helpers"
 
 // POST /api/admin/import-amazon-products - Import products from Amazon FBA inventory
 export async function POST() {
+  const authResult = await requireAuth()
+  if (authResult.error) return authResult.error
+  const { user } = authResult
+
   try {
     // Check environment variables first
     const envCheck = {
@@ -53,17 +58,7 @@ export async function POST() {
 
     console.log(`Found ${inventory.length} FBA products`)
 
-    // Get admin user for createdBy
-    const adminUser = await prisma.user.findFirst({
-      where: { role: "ADMIN" }
-    })
-
-    if (!adminUser) {
-      return NextResponse.json({
-        success: false,
-        error: "No admin user found. Please initialize database first."
-      })
-    }
+    // Use the authenticated user for createdBy
 
     let processed = 0
     let skipped = 0
@@ -116,7 +111,8 @@ export async function POST() {
                 title: productDetails.title || `Product ${asin}`,
                 category: productDetails.productType || "Uncategorized",
                 status: "NOT_STARTED",
-                createdById: adminUser.id,
+                createdById: user.id,
+                organizationId: user.organizationId,
                 metadata: {
                   brand: productDetails.brand,
                   manufacturer: productDetails.manufacturer,
@@ -214,6 +210,9 @@ export async function POST() {
 
 // GET /api/admin/import-amazon-products - Check import status
 export async function GET() {
+  const authResult = await requireAuth()
+  if (authResult.error) return authResult.error
+
   try {
     const productCount = await prisma.product.count()
     const sourceImageCount = await prisma.sourceImage.count()

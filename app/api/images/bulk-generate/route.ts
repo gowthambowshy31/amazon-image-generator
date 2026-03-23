@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { requireAuth } from "@/lib/auth-helpers"
 import { z } from "zod"
 
 const bulkGenerateSchema = z.object({
@@ -11,10 +12,9 @@ const bulkGenerateSchema = z.object({
 // POST /api/images/bulk-generate - Queue bulk image generation
 export async function POST(request: NextRequest) {
   try {
-    // Get default admin user for logging
-    const adminUser = await prisma.user.findFirst({
-      where: { role: 'ADMIN' }
-    })
+    const authResult = await requireAuth()
+    if (authResult.error) return authResult.error
+    const { user } = authResult
 
     const body = await request.json()
     const validated = bulkGenerateSchema.parse(body)
@@ -34,21 +34,19 @@ export async function POST(request: NextRequest) {
     })
 
     // Log activity
-    if (adminUser) {
-      await prisma.activityLog.create({
-        data: {
-          userId: adminUser.id,
-          action: "CREATE_BULK_JOB",
-          entityType: "GenerationJob",
-          entityId: job.id,
-          metadata: {
-            productCount: validated.productIds.length,
-            imageTypeCount: validated.imageTypeIds.length,
-            totalImages
-          }
+    await prisma.activityLog.create({
+      data: {
+        userId: user.id,
+        action: "CREATE_BULK_JOB",
+        entityType: "GenerationJob",
+        entityId: job.id,
+        metadata: {
+          productCount: validated.productIds.length,
+          imageTypeCount: validated.imageTypeIds.length,
+          totalImages
         }
-      })
-    }
+      }
+    })
 
     // In a real application, you would trigger a background worker here
     // For now, we'll just return the job
@@ -72,6 +70,10 @@ export async function POST(request: NextRequest) {
 // GET /api/images/bulk-generate - Get all generation jobs
 export async function GET(request: NextRequest) {
   try {
+    const authResult = await requireAuth()
+    if (authResult.error) return authResult.error
+    const { user } = authResult
+
     const { searchParams } = new URL(request.url)
     const status = searchParams.get("status")
 
