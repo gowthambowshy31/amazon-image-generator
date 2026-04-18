@@ -258,18 +258,27 @@ export default function GalleryPage() {
       <main className="mx-auto max-w-7xl px-6 py-6 space-y-6">
         {manifest.items.map((item) => (
           <Card key={item.original} className="p-4">
-            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-              <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+              <div className="flex items-center gap-4">
                 {item.originalUrl && (
-                  <img
-                    src={item.originalUrl}
-                    alt={item.original}
-                    className="h-12 w-12 object-cover rounded border border-border/60"
-                  />
+                  <a
+                    href={item.originalUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    title="Open original at full size"
+                    className="shrink-0"
+                  >
+                    <img
+                      src={item.originalUrl}
+                      alt={item.original}
+                      className="h-28 w-28 object-cover rounded-md border border-border/60 hover:ring-2 hover:ring-primary/50 transition"
+                    />
+                  </a>
                 )}
                 <div>
+                  <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Original</div>
                   <div className="font-mono text-sm">{item.original}</div>
-                  <div className="text-xs text-muted-foreground">
+                  <div className="text-xs text-muted-foreground mt-1">
                     {item.variants.filter((v) => v.status === "ok").length}/
                     {item.variants.length} variants
                   </div>
