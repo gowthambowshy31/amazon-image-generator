@@ -55,3 +55,8 @@ privosa-*.json
 
 # Exports
 /exports/
+
+# Local client batch artifacts (images stay local, manifest and enhanced variants live on S3)
+/amazon images/
+/batch-log.txt
+/manifest-*.json
