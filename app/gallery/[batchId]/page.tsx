@@ -259,34 +259,41 @@ export default function GalleryPage() {
         {manifest.items.map((item) => (
           <Card key={item.original} className="p-4">
             <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-              <div className="flex items-center gap-4">
-                {item.originalUrl && (
-                  <a
-                    href={item.originalUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    title="Open original at full size"
-                    className="shrink-0"
-                  >
-                    <img
-                      src={item.originalUrl}
-                      alt={item.original}
-                      className="h-28 w-28 object-cover rounded-md border border-border/60 hover:ring-2 hover:ring-primary/50 transition"
-                    />
-                  </a>
-                )}
-                <div>
-                  <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Original</div>
-                  <div className="font-mono text-sm">{item.original}</div>
-                  <div className="text-xs text-muted-foreground mt-1">
-                    {item.variants.filter((v) => v.status === "ok").length}/
-                    {item.variants.length} variants
-                  </div>
+              <div>
+                <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Original</div>
+                <div className="font-mono text-sm">{item.original}</div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  {item.variants.filter((v) => v.status === "ok").length}/
+                  {item.variants.length} variants
                 </div>
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {item.originalUrl && (
+                <div className="relative rounded-lg border border-border/60 overflow-hidden group">
+                  <div className="aspect-square bg-muted flex items-center justify-center">
+                    <img
+                      src={item.originalUrl}
+                      alt={item.original}
+                      className="h-full w-full object-cover"
+                      loading="lazy"
+                    />
+                  </div>
+                  <div className="absolute top-2 left-2 flex gap-1">
+                    <Badge variant="outline" className="text-[10px] bg-background/80">
+                      original
+                    </Badge>
+                  </div>
+                  <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition">
+                    <a href={item.originalUrl} download={item.original} target="_blank" rel="noreferrer">
+                      <Button size="icon" variant="secondary" className="h-8 w-8" title="Download original">
+                        <Download className="h-4 w-4" />
+                      </Button>
+                    </a>
+                  </div>
+                </div>
+              )}
               {item.variants.map((v) => {
                 const k = favKey(item.original, v.index)
                 const isFav = favorites.has(k)
