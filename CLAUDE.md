@@ -1,3 +1,9 @@
+# Git Workflow
+
+- Work directly on `main` — no feature branches for routine work.
+- After each change, **commit and push immediately** without asking.
+- Use short, descriptive commit messages (what was done, not how).
+
 # EC2 Deployment
 
 - **IP:** 56.228.4.202
