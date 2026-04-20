@@ -31,6 +31,9 @@ interface Args {
   variants: number
   concurrency: number
   prompt: string
+  model: string
+  force: boolean
+  gapMs: number
 }
 
 function parseArgs(): Args {
@@ -39,6 +42,7 @@ function parseArgs(): Args {
     const i = argv.indexOf(flag)
     return i >= 0 ? argv[i + 1] : fallback
   }
+  const has = (flag: string) => argv.includes(flag)
   const today = new Date().toISOString().slice(0, 10)
   return {
     input: get("--input", "C:/work/code/amazon-image-generator/amazon images")!,
@@ -46,6 +50,9 @@ function parseArgs(): Args {
     variants: Number(get("--variants", "3")),
     concurrency: Number(get("--concurrency", "5")),
     prompt: get("--prompt", DEFAULT_PROMPT)!,
+    model: get("--model", "nano-banana-pro-preview")!,
+    force: has("--force"),
+    gapMs: Number(get("--gap-ms", "1500")),
   }
 }
 
@@ -58,11 +65,11 @@ function mimeFor(file: string): string {
 }
 
 /**
- * Serialized rate limiter for gemini-3-pro-image.
- * Empirically 3.5s (17 RPM) still triggers 429s — the preview model has a tighter
- * burst policy than the advertised 20/min. 10s (6 RPM) is what actually stays under.
+ * Serialized rate limiter. The effective gap between calls is set from --gap-ms
+ * at startup. Paid tier for nano-banana-pro handles ~60 RPM (1s gap); free tier
+ * for preview image models required ~10s gap to stay under quota.
  */
-const MIN_GAP_MS = 10_000
+let MIN_GAP_MS = 10_000
 let rateGate: Promise<void> = Promise.resolve()
 let lastCallAt = 0
 
@@ -96,7 +103,7 @@ function parseRetryAfter(text: string): number {
   return 30_000
 }
 
-async function callGemini(sourceBuffer: Buffer, sourceMime: string, prompt: string): Promise<{ buffer: Buffer; mime: string }> {
+async function callGemini(sourceBuffer: Buffer, sourceMime: string, prompt: string, model: string = "nano-banana-pro-preview"): Promise<{ buffer: Buffer; mime: string }> {
   const apiKey = process.env.GEMINI_API_KEY
   if (!apiKey) throw new Error("GEMINI_API_KEY not set")
 
@@ -115,7 +122,7 @@ async function callGemini(sourceBuffer: Buffer, sourceMime: string, prompt: stri
   await acquireRateToken()
 
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-image-preview:generateContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -286,7 +293,7 @@ async function processOne(file: string, sourceDir: string, args: Args, existing:
     needed.map(async (n): Promise<VariantResult> => {
       try {
         const { buffer, mime: outMime } = await withRetry(
-          () => callGemini(buf, mime, args.prompt),
+          () => callGemini(buf, mime, args.prompt, args.model),
           6,
           `${file} v${n}`
         )
@@ -336,6 +343,7 @@ async function runPool<T>(items: T[], limit: number, worker: (item: T, index: nu
 
 async function main() {
   const args = parseArgs()
+  MIN_GAP_MS = args.gapMs
 
   if (!existsSync(args.input)) {
     throw new Error(`Input folder not found: ${args.input}`)
@@ -348,24 +356,32 @@ async function main() {
     .sort()
 
   console.log(`Batch: ${args.batch}`)
+  console.log(`Model: ${args.model}`)
   console.log(`Input: ${args.input}`)
   console.log(`Files: ${files.length}`)
   console.log(`Variants per image: ${args.variants}`)
   console.log(`Concurrency (images in flight): ${args.concurrency}`)
   console.log(`Total Gemini calls: ${files.length * args.variants}`)
+  console.log(`Force re-generate: ${args.force}`)
   console.log("")
 
-  const manifestExisting = await loadExistingManifest(args.batch)
-  const s3Existing = await scanS3ForExisting(args.batch, files)
-  const existingMap: Record<string, ItemResult> = { ...s3Existing, ...(manifestExisting || {}) }
-
-  const okReused = Object.values(existingMap).reduce(
-    (n, it) => n + it.variants.filter((v) => v.status === "ok" && v.url).length,
-    0
-  )
-  if (okReused > 0) {
-    console.log(`Found ${okReused} ok variants already uploaded — will reuse and only generate missing ones.`)
+  let existingMap: Record<string, ItemResult> = {}
+  if (args.force) {
+    console.log("--force enabled: regenerating all variants regardless of existing S3 objects.")
     console.log("")
+  } else {
+    const manifestExisting = await loadExistingManifest(args.batch)
+    const s3Existing = await scanS3ForExisting(args.batch, files)
+    existingMap = { ...s3Existing, ...(manifestExisting || {}) }
+
+    const okReused = Object.values(existingMap).reduce(
+      (n, it) => n + it.variants.filter((v) => v.status === "ok" && v.url).length,
+      0
+    )
+    if (okReused > 0) {
+      console.log(`Found ${okReused} ok variants already uploaded — will reuse and only generate missing ones.`)
+      console.log("")
+    }
   }
 
   const results: ItemResult[] = []
