@@ -3,7 +3,7 @@ import type { NextRequest } from "next/server"
 import { getToken } from "next-auth/jwt"
 
 const cookieName = "image-gen-platform.session-token"
-const publicRoutes = ["/login", "/register", "/api/auth", "/gallery", "/api/batch", "/api/cli"]
+const publicRoutes = ["/login", "/register", "/api/auth", "/gallery", "/api/batch", "/api/cli", "/docs", "/api/docs"]
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
