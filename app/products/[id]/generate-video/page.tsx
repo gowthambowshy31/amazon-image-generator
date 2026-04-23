@@ -375,7 +375,7 @@ export default function GenerateVideoPage() {
                   className="mt-2 w-full px-4 py-2 bg-background border border-input rounded-lg text-foreground focus-visible:ring-1 focus-visible:ring-ring"
                 >
                   <option value="veo">Google Veo 3.1</option>
-                  <option value="seedance">Seedance 1.0 Pro</option>
+                  <option value="seedance">Seedance 2.0</option>
                 </select>
               </div>
 
