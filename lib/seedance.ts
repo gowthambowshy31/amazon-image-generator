@@ -41,6 +41,7 @@ export interface SeedanceCreateTaskInput {
   seed?: number
   watermark?: boolean
   camerafixed?: boolean
+  generateAudio?: boolean
   images?: SeedanceImageInput[]
 }
 
@@ -99,6 +100,9 @@ export async function createSeedanceTask(
     resolution: input.resolution || "720p",
     duration: input.duration ?? 5,
     watermark: input.watermark ?? false,
+    // Seedance 2.0 generates audio by default and its audio content moderation
+    // is aggressive; disable unless the caller explicitly opts in.
+    generate_audio: input.generateAudio ?? false,
   }
   if (typeof input.seed === "number") body.seed = input.seed
   if (typeof input.camerafixed === "boolean") body.camerafixed = input.camerafixed
