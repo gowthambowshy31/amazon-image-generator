@@ -136,7 +136,7 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      console.log("🎬 Starting video generation with Seedance 1.0 Pro...")
+      console.log("🎬 Starting video generation with Seedance 2.0...")
       console.log("Prompt:", promptToUse)
       console.log("Settings:", {
         ratio: validated.aspectRatio,
