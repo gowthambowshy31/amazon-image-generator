@@ -1,6 +1,11 @@
 # Video Generation Guide
 
-Your Amazon Image Generator platform now supports AI-powered video generation using Google's Veo 3.1 model!
+Your Amazon Image Generator platform supports AI-powered video generation with two providers:
+
+- **Google Veo 3.1** (default) — uses `GEMINI_API_KEY`
+- **ByteDance Seedance 1.0 Pro** (Volcengine Ark) — uses `ARK_API_KEY`
+
+Select the model from the **Model** dropdown on the generate-video page, or pass `"provider": "veo" | "seedance"` in the API body.
 
 ## 🎬 How to Generate Videos for Products
 
@@ -203,9 +208,15 @@ Show the product in an exciting way that captures attention immediately.
 ## ⚙️ Technical Details
 
 ### Model Information
-- **AI Model**: Veo 3.1 Generate Preview
-- **Provider**: Google Generative AI
-- **API**: Google AI Studio / Vertex AI
+- **Google Veo 3.1 Generate Preview** — Google AI Studio / Vertex AI
+- **Seedance 1.0 Pro** (`doubao-seedance-1-0-pro-250528`) — Volcengine Ark, endpoint `https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks`. Override with `SEEDANCE_MODEL` and `ARK_BASE_URL` if needed.
+
+### Seedance-specific notes
+- Supported ratios: `16:9`, `9:16`, `1:1` (the API also accepts `4:3`, `3:4`, `21:9`, `adaptive`).
+- Resolutions: `480p`, `720p`, `1080p`.
+- Duration: 3–12 seconds.
+- Image-to-video: selecting a source or generated image passes it as the first frame (encoded as a data URI, so no public URL is required).
+- Task IDs start with `cgt-...`; they are persisted in `GeneratedVideo.operationName` and polled via `GET /api/v3/contents/generations/tasks/{id}`. When the task reaches `succeeded`, the `content.video_url` is downloaded into `public/uploads/` just like the Veo flow.
 
 ### Generation Process
 1. **Request Sent**: Video generation request is sent to Veo 3.1 API
@@ -268,9 +279,8 @@ enum VideoStatus {
 ## 🚨 Troubleshooting
 
 ### Video Generation Fails
-- Check `GEMINI_API_KEY` is set in `.env`
-- Verify billing is enabled on Google Cloud Console
-- Check API quota limits
+- For Veo: check `GEMINI_API_KEY` is set in `.env`; verify billing is enabled on Google Cloud Console; check API quota limits.
+- For Seedance: check `ARK_API_KEY` is set in `.env` (get one from the [Volcengine Ark console](https://console.volcengine.com/ark)); verify the model ID is enabled on your account.
 
 ### Status Check Returns Error
 - Make sure to use the correct `operationName`

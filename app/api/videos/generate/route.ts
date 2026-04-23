@@ -3,6 +3,12 @@ import { prisma } from "@/lib/prisma"
 import { requireAuth } from "@/lib/auth-helpers"
 import { z } from "zod"
 import path from "path"
+import {
+  SEEDANCE_DEFAULT_MODEL,
+  createSeedanceTask,
+  toDataUri,
+  type SeedanceImageInput,
+} from "@/lib/seedance"
 
 const generateVideoSchema = z.object({
   productId: z.string(),
@@ -11,9 +17,10 @@ const generateVideoSchema = z.object({
   customPrompt: z.string().optional(),
   sourceImageId: z.string().optional(),
   generatedImageId: z.string().optional(),
+  provider: z.enum(["veo", "seedance"]).optional().default("veo"),
   aspectRatio: z.enum(["16:9", "9:16", "1:1"]).optional().default("16:9"),
-  durationSeconds: z.number().min(4).max(8).optional().default(4),
-  resolution: z.enum(["720p", "1080p"]).optional().default("720p")
+  durationSeconds: z.number().min(3).max(12).optional().default(4),
+  resolution: z.enum(["480p", "720p", "1080p"]).optional().default("720p")
 })
 
 // POST /api/videos/generate - Generate a product video
@@ -79,67 +86,144 @@ export async function POST(request: NextRequest) {
       .replace(/\{category\}/g, product.category || '')
       .replace(/\{asin\}/g, product.asin || '')
 
-    // Create video generation request
-    const apiKey = process.env.GEMINI_API_KEY
-    if (!apiKey) {
-      return NextResponse.json(
-        { error: "GEMINI_API_KEY not configured" },
-        { status: 500 }
-      )
-    }
+    let operationName: string
+    let aiModel: string
 
-    console.log('🎬 Starting video generation with Veo 3.1...')
-    console.log('Prompt:', promptToUse)
-    console.log('Settings:', {
-      aspectRatio: validated.aspectRatio,
-      duration: validated.durationSeconds,
-      resolution: validated.resolution
-    })
-
-    // Initiate video generation
-    const response = await fetch(
-      'https://generativelanguage.googleapis.com/v1beta/models/veo-3.1-generate-preview:predictLongRunning',
-      {
-        method: 'POST',
-        headers: {
-          'x-goog-api-key': apiKey,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          instances: [
-            {
-              prompt: promptToUse
-            }
-          ],
-          parameters: {
-            aspectRatio: validated.aspectRatio,
-            durationSeconds: validated.durationSeconds,
-            resolution: validated.resolution
-          }
+    if (validated.provider === "seedance") {
+      // Resolve optional reference image (source or generated) to a data URI
+      // so Seedance can use it as the first frame.
+      const images: SeedanceImageInput[] = []
+      if (validated.sourceImageId) {
+        const src = await prisma.sourceImage.findUnique({
+          where: { id: validated.sourceImageId },
         })
+        if (src) {
+          try {
+            const uri = src.localFilePath?.startsWith("http")
+              ? await toDataUri({ httpUrl: src.localFilePath })
+              : src.localFilePath
+                ? await toDataUri({
+                    absolutePath: path.join(
+                      process.cwd(),
+                      "public",
+                      src.localFilePath.replace(/^\/+/, "")
+                    ),
+                  })
+                : await toDataUri({ httpUrl: src.amazonImageUrl })
+            images.push({ url: uri, role: "first_frame" })
+          } catch (e) {
+            console.error("Failed to load source image for Seedance:", e)
+          }
+        }
+      } else if (validated.generatedImageId) {
+        const gen = await prisma.generatedImage.findUnique({
+          where: { id: validated.generatedImageId },
+        })
+        if (gen?.fileName) {
+          try {
+            const uri = await toDataUri({
+              absolutePath: path.join(
+                process.cwd(),
+                "public",
+                "uploads",
+                gen.fileName
+              ),
+            })
+            images.push({ url: uri, role: "first_frame" })
+          } catch (e) {
+            console.error("Failed to load generated image for Seedance:", e)
+          }
+        }
       }
-    )
 
-    if (!response.ok) {
-      const errorData = await response.json()
-      console.error('Video generation API error:', errorData)
-      return NextResponse.json(
-        { error: "Video generation request failed", details: errorData },
-        { status: 500 }
+      console.log("🎬 Starting video generation with Seedance 1.0 Pro...")
+      console.log("Prompt:", promptToUse)
+      console.log("Settings:", {
+        ratio: validated.aspectRatio,
+        duration: validated.durationSeconds,
+        resolution: validated.resolution,
+        images: images.length,
+      })
+
+      try {
+        const task = await createSeedanceTask({
+          prompt: promptToUse,
+          ratio: validated.aspectRatio,
+          resolution: validated.resolution,
+          duration: validated.durationSeconds,
+          images,
+        })
+        operationName = task.id
+        aiModel = SEEDANCE_DEFAULT_MODEL
+      } catch (err) {
+        console.error("Seedance generation error:", err)
+        return NextResponse.json(
+          {
+            error: "Seedance generation request failed",
+            details: err instanceof Error ? err.message : String(err),
+          },
+          { status: 500 }
+        )
+      }
+    } else {
+      // Default: Google Veo 3.1
+      const apiKey = process.env.GEMINI_API_KEY
+      if (!apiKey) {
+        return NextResponse.json(
+          { error: "GEMINI_API_KEY not configured" },
+          { status: 500 }
+        )
+      }
+
+      console.log("🎬 Starting video generation with Veo 3.1...")
+      console.log("Prompt:", promptToUse)
+      console.log("Settings:", {
+        aspectRatio: validated.aspectRatio,
+        duration: validated.durationSeconds,
+        resolution: validated.resolution,
+      })
+
+      const response = await fetch(
+        "https://generativelanguage.googleapis.com/v1beta/models/veo-3.1-generate-preview:predictLongRunning",
+        {
+          method: "POST",
+          headers: {
+            "x-goog-api-key": apiKey,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            instances: [{ prompt: promptToUse }],
+            parameters: {
+              aspectRatio: validated.aspectRatio,
+              durationSeconds: validated.durationSeconds,
+              resolution: validated.resolution,
+            },
+          }),
+        }
       )
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        console.error("Video generation API error:", errorData)
+        return NextResponse.json(
+          { error: "Video generation request failed", details: errorData },
+          { status: 500 }
+        )
+      }
+
+      const data = await response.json()
+      operationName = data.name
+      aiModel = "veo-3.1"
+
+      if (!operationName) {
+        return NextResponse.json(
+          { error: "No operation name returned from API" },
+          { status: 500 }
+        )
+      }
     }
 
-    const data = await response.json()
-    const operationName = data.name
-
-    if (!operationName) {
-      return NextResponse.json(
-        { error: "No operation name returned from API" },
-        { status: 500 }
-      )
-    }
-
-    console.log('✅ Video generation started:', operationName)
+    console.log("✅ Video generation started:", operationName)
 
     // Create video record in database
     const videoRecord = await prisma.generatedVideo.create({
@@ -150,7 +234,7 @@ export async function POST(request: NextRequest) {
         generatedImageId: validated.generatedImageId,
         status: 'GENERATING',
         promptUsed: promptToUse,
-        aiModel: 'veo-3.1',
+        aiModel,
         operationName,
         aspectRatio: validated.aspectRatio,
         durationSeconds: validated.durationSeconds,

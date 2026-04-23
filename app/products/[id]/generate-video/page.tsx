@@ -77,6 +77,7 @@ export default function GenerateVideoPage() {
   const [templatePrompt, setTemplatePrompt] = useState<string | null>(null)
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null)
   const [initialTemplateId, setInitialTemplateId] = useState<string | null>(null)
+  const [provider, setProvider] = useState<'veo' | 'seedance'>('veo')
   const [aspectRatio, setAspectRatio] = useState('16:9')
   const [duration, setDuration] = useState(4)
   const [resolution, setResolution] = useState('720p')
@@ -127,6 +128,7 @@ export default function GenerateVideoPage() {
       const requestBody: any = {
         productId: product.id,
         templateId: selectedTemplateId,
+        provider,
         aspectRatio,
         durationSeconds: duration,
         resolution
@@ -356,7 +358,27 @@ export default function GenerateVideoPage() {
           <CardContent className="p-6">
             <h2 className="text-lg font-semibold text-foreground mb-4">Video Settings</h2>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div>
+                <Label className="mb-2">
+                  Model
+                </Label>
+                <select
+                  value={provider}
+                  onChange={(e) => {
+                    const v = e.target.value as 'veo' | 'seedance'
+                    setProvider(v)
+                    // Seedance supports 5–10s sweet spot; Veo supports 4–8s
+                    if (v === 'seedance' && duration < 5) setDuration(5)
+                    if (v === 'veo' && duration > 8) setDuration(8)
+                  }}
+                  className="mt-2 w-full px-4 py-2 bg-background border border-input rounded-lg text-foreground focus-visible:ring-1 focus-visible:ring-ring"
+                >
+                  <option value="veo">Google Veo 3.1</option>
+                  <option value="seedance">Seedance 1.0 Pro</option>
+                </select>
+              </div>
+
               <div>
                 <Label className="mb-2">
                   Aspect Ratio
@@ -381,11 +403,12 @@ export default function GenerateVideoPage() {
                   onChange={(e) => setDuration(Number(e.target.value))}
                   className="mt-2 w-full px-4 py-2 bg-background border border-input rounded-lg text-foreground focus-visible:ring-1 focus-visible:ring-ring"
                 >
-                  <option value={4}>4 seconds</option>
-                  <option value={5}>5 seconds</option>
-                  <option value={6}>6 seconds</option>
-                  <option value={7}>7 seconds</option>
-                  <option value={8}>8 seconds</option>
+                  {(provider === 'seedance'
+                    ? [3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+                    : [4, 5, 6, 7, 8]
+                  ).map((s) => (
+                    <option key={s} value={s}>{s} seconds</option>
+                  ))}
                 </select>
               </div>
 
@@ -398,6 +421,7 @@ export default function GenerateVideoPage() {
                   onChange={(e) => setResolution(e.target.value)}
                   className="mt-2 w-full px-4 py-2 bg-background border border-input rounded-lg text-foreground focus-visible:ring-1 focus-visible:ring-ring"
                 >
+                  {provider === 'seedance' && <option value="480p">480p</option>}
                   <option value="720p">720p</option>
                   <option value="1080p">1080p</option>
                 </select>
