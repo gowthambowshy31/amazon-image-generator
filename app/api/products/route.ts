@@ -86,15 +86,17 @@ export async function GET(request: NextRequest) {
       }
     })
 
-    // Filter products to only include those with inventory > 0
-    const productsWithInventory = products.filter(product => {
+    // Hide products that FBA sync marked as out-of-stock (explicit quantity === 0).
+    // Products without any quantity metadata (e.g. newly imported from the catalog)
+    // are shown — we have no signal either way.
+    const visibleProducts = products.filter(product => {
       const metadata = product.metadata as any
-      // Check both possible locations for quantity
-      const quantity = metadata?.quantity ?? metadata?.inventory?.quantity ?? 0
+      const quantity = metadata?.quantity ?? metadata?.inventory?.quantity
+      if (quantity === undefined || quantity === null) return true
       return quantity > 0
     })
 
-    return NextResponse.json(productsWithInventory)
+    return NextResponse.json(visibleProducts)
   } catch (error) {
     console.error("Error fetching products:", error)
     return NextResponse.json(
