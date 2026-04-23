@@ -65,3 +65,6 @@ privosa-*.json
 /amazon images/
 /batch-log.txt
 /manifest-*.json
+
+# Claude Code local state
+.claude/
