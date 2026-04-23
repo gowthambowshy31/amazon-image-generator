@@ -537,11 +537,22 @@ export async function getAmazonSPClientForOrg(organizationId: string | null): Pr
     refreshToken = connection.refreshToken
   }
 
+  let clientSecret = ""
+  if (connection.clientSecret) {
+    try {
+      clientSecret = decrypt(connection.clientSecret)
+    } catch {
+      clientSecret = connection.clientSecret
+    }
+  } else {
+    clientSecret = process.env.AMAZON_CLIENT_SECRET || ""
+  }
+
   return new AmazonSPService({
     region: connection.region || "na",
     refresh_token: refreshToken,
-    client_id: process.env.AMAZON_CLIENT_ID || "",
-    client_secret: process.env.AMAZON_CLIENT_SECRET || "",
+    client_id: connection.clientId || process.env.AMAZON_CLIENT_ID || "",
+    client_secret: clientSecret,
     marketplace_id: connection.marketplaceId || "ATVPDKIKX0DER",
     seller_id: connection.sellerId,
   })

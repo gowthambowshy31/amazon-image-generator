@@ -33,6 +33,8 @@ model AmazonConnection {
   refreshToken    String    @db.Text  // encrypted
   accessToken     String?   @db.Text
   tokenExpiresAt  DateTime?
+  clientId        String?   @db.Text  // per-connection SP-API app client_id (falls back to env)
+  clientSecret    String?   @db.Text  // encrypted SP-API app client_secret
   storeName       String?
   isActive        Boolean   @default(true)
   createdAt       DateTime  @default(now())
