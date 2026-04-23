@@ -39,3 +39,12 @@ pm2 restart amazon-image-generator
 
 - The old pre-consolidation IP `56.228.4.202` is decommissioned — do not use.
 - The consolidated server may be stopped to save costs. Use the `/server` skill to start it before deploying.
+
+# CLI & MCP server
+
+This repo also contains two publishable packages for programmatic access:
+
+- **`cli/`** — `@bowshai/imagegen` npm package. Commands: `login`, `whoami`, `generate`, `video`, `templates`, `config`. Build with `cd cli && npm run build`.
+- **`mcp/`** — `@bowshai/imagegen-mcp` MCP server for Claude Desktop / Claude Code. Tools: `generate_variations`, `generate_video`, `list_templates`, `whoami`. Build with `cd mcp && npm run build`.
+
+Both authenticate via API keys (`igp_...`) generated at `/settings/api-keys` in the web app. Keys are hashed (SHA-256) and stored on the `ApiKey` Prisma model; all CLI traffic flows through `/api/cli/*` endpoints using `Authorization: Bearer <key>`.

@@ -2,8 +2,13 @@
 
 # dependencies
 /node_modules
+node_modules/
 /.pnp
 .pnp.*
+
+# CLI / MCP build output (generated at publish time)
+cli/dist/
+mcp/dist/
 .yarn/*
 !.yarn/patches
 !.yarn/plugins
