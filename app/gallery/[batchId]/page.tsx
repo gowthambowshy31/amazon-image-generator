@@ -7,14 +7,15 @@ import { Card } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
-import { Check, Download, RefreshCw, Star } from "lucide-react"
+import { Check, Download, Play, RefreshCw, Star, Timer } from "lucide-react"
 
 interface Variant {
   index: number
   url?: string
   key?: string
-  status: "ok" | "failed"
+  status: "ok" | "failed" | "queued"
   error?: string
+  queuedAt?: string
 }
 
 interface Item {
@@ -51,16 +52,50 @@ export default function GalleryPage() {
   const [regenPrompt, setRegenPrompt] = useState("")
   const [regenBusy, setRegenBusy] = useState(false)
   const [downloading, setDownloading] = useState(false)
+  const [quota, setQuota] = useState<{
+    used: number
+    limit: number
+    remaining: number
+    resetsAt: string
+  } | null>(null)
+  const [queueCounts, setQueueCounts] = useState<{
+    queued: number
+    running: number
+    completed: number
+    failed: number
+  } | null>(null)
+  const [drainBusy, setDrainBusy] = useState(false)
+  const [countdown, setCountdown] = useState("")
+
+  const reloadManifest = useCallback(async () => {
+    const res = await fetch(`/api/batch/manifest?batch=${encodeURIComponent(batchId)}`)
+    if (!res.ok) throw new Error(`Failed to load manifest (${res.status})`)
+    const data: Manifest = await res.json()
+    setManifest(data)
+    return data
+  }, [batchId])
+
+  const reloadQueueStatus = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/batch/drain?batch=${encodeURIComponent(batchId)}`)
+      if (!res.ok) return
+      const data = await res.json()
+      setQuota(data.quota)
+      setQueueCounts({
+        queued: data.queued,
+        running: data.running,
+        completed: data.completed,
+        failed: data.failed,
+      })
+    } catch {}
+  }, [batchId])
 
   useEffect(() => {
     let cancelled = false
     async function load() {
       setLoading(true)
       try {
-        const res = await fetch(`/api/batch/manifest?batch=${encodeURIComponent(batchId)}`)
-        if (!res.ok) throw new Error(`Failed to load manifest (${res.status})`)
-        const data: Manifest = await res.json()
-        if (!cancelled) setManifest(data)
+        await reloadManifest()
       } catch (err) {
         if (!cancelled) setError((err as Error).message)
       } finally {
@@ -68,10 +103,60 @@ export default function GalleryPage() {
       }
     }
     load()
+    reloadQueueStatus()
     return () => {
       cancelled = true
     }
-  }, [batchId])
+  }, [batchId, reloadManifest, reloadQueueStatus])
+
+  // Poll manifest + queue status while anything is queued or running.
+  useEffect(() => {
+    const hasQueued =
+      (queueCounts && (queueCounts.queued > 0 || queueCounts.running > 0)) ||
+      manifest?.items.some((it) => it.variants.some((v) => v.status === "queued"))
+    if (!hasQueued) return
+    const iv = setInterval(() => {
+      reloadManifest().catch(() => {})
+      reloadQueueStatus()
+    }, 30_000)
+    return () => clearInterval(iv)
+  }, [queueCounts, manifest, reloadManifest, reloadQueueStatus])
+
+  // Live countdown to PT midnight.
+  useEffect(() => {
+    if (!quota?.resetsAt) return
+    const update = () => {
+      const ms = new Date(quota.resetsAt).getTime() - Date.now()
+      if (ms <= 0) {
+        setCountdown("0m")
+        return
+      }
+      const h = Math.floor(ms / 3_600_000)
+      const m = Math.floor((ms % 3_600_000) / 60_000)
+      setCountdown(h > 0 ? `${h}h ${m}m` : `${m}m`)
+    }
+    update()
+    const iv = setInterval(update, 30_000)
+    return () => clearInterval(iv)
+  }, [quota?.resetsAt])
+
+  const runDrain = useCallback(async () => {
+    setDrainBusy(true)
+    try {
+      const res = await fetch("/api/batch/drain", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      })
+      if (!res.ok) throw new Error(`Drain failed (${res.status})`)
+      await reloadManifest()
+      await reloadQueueStatus()
+    } catch (err) {
+      alert((err as Error).message)
+    } finally {
+      setDrainBusy(false)
+    }
+  }, [reloadManifest, reloadQueueStatus])
 
   useEffect(() => {
     try {
@@ -110,16 +195,18 @@ export default function GalleryPage() {
   )
 
   const stats = useMemo(() => {
-    if (!manifest) return { ok: 0, failed: 0, total: 0 }
+    if (!manifest) return { ok: 0, failed: 0, queued: 0, total: 0 }
     let ok = 0
     let failed = 0
+    let queued = 0
     for (const it of manifest.items) {
       for (const v of it.variants) {
         if (v.status === "ok") ok++
+        else if (v.status === "queued") queued++
         else failed++
       }
     }
-    return { ok, failed, total: ok + failed }
+    return { ok, failed, queued, total: ok + failed + queued }
   }, [manifest])
 
   const downloadZip = useCallback(
@@ -199,9 +286,22 @@ export default function GalleryPage() {
           sourceUrl: item.originalUrl,
         }),
       })
-      if (!res.ok) throw new Error(`Regenerate failed (${res.status})`)
       const data = await res.json()
+      if (res.status === 429 && data?.queued) {
+        // Out of quota — server has queued this slot for the next reset.
+        await reloadManifest()
+        await reloadQueueStatus()
+        setRegenTarget(null)
+        alert(
+          `Daily image quota reached. This slot is queued and will regenerate automatically after the next reset (${new Date(
+            data.quota?.resetsAt || Date.now()
+          ).toLocaleString()}).`
+        )
+        return
+      }
+      if (!res.ok) throw new Error(data?.error || `Regenerate failed (${res.status})`)
       setOverrides((prev) => ({ ...prev, [favKey(item.original, variant.index)]: data.url }))
+      await reloadQueueStatus()
       setRegenTarget(null)
     } catch (err) {
       alert((err as Error).message)
@@ -229,6 +329,9 @@ export default function GalleryPage() {
             <p className="text-xs text-muted-foreground">
               Batch <span className="font-mono">{manifest.batchId}</span> ·{" "}
               {manifest.items.length} originals · {stats.ok} variants
+              {stats.queued > 0 && (
+                <span className="text-amber-600 dark:text-amber-400"> · {stats.queued} queued</span>
+              )}
               {stats.failed > 0 && (
                 <span className="text-destructive"> · {stats.failed} failed</span>
               )}
@@ -253,6 +356,39 @@ export default function GalleryPage() {
             </Button>
           </div>
         </div>
+
+        {quota && (
+          <div className="border-t border-border/40 bg-muted/40">
+            <div className="mx-auto max-w-7xl px-6 py-2 flex flex-wrap items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-4 text-muted-foreground">
+                <span className="flex items-center gap-1.5">
+                  <Timer className="h-3.5 w-3.5" />
+                  <strong className="text-foreground font-semibold">
+                    {quota.used} / {quota.limit}
+                  </strong>{" "}
+                  images used today
+                  {countdown && <> · resets in <strong className="text-foreground">{countdown}</strong></>}
+                </span>
+                {queueCounts && queueCounts.queued > 0 && (
+                  <span className="text-amber-600 dark:text-amber-400">
+                    {queueCounts.queued} waiting for next reset
+                  </span>
+                )}
+                {queueCounts && queueCounts.running > 0 && (
+                  <span>{queueCounts.running} running…</span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                {queueCounts && queueCounts.queued > 0 && (
+                  <Button size="sm" variant="outline" onClick={runDrain} disabled={drainBusy || quota.remaining === 0}>
+                    <Play className="h-3.5 w-3.5 mr-1" />
+                    {drainBusy ? "Running…" : "Run queued now"}
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </header>
 
       <main className="mx-auto max-w-7xl px-6 py-6 space-y-6">
@@ -298,7 +434,8 @@ export default function GalleryPage() {
                 const k = favKey(item.original, v.index)
                 const isFav = favorites.has(k)
                 const url = effectiveUrl(item, v)
-                const isFailed = v.status === "failed" || !url
+                const isQueued = v.status === "queued" && !overrides[k]
+                const isFailed = !isQueued && (v.status === "failed" || !url)
 
                 return (
                   <div
@@ -308,7 +445,17 @@ export default function GalleryPage() {
                     }`}
                   >
                     <div className="aspect-square bg-muted flex items-center justify-center">
-                      {isFailed ? (
+                      {isQueued ? (
+                        <div className="p-4 text-center">
+                          <Timer className="h-6 w-6 mx-auto mb-2 text-amber-600 dark:text-amber-400" />
+                          <div className="text-sm font-medium text-amber-700 dark:text-amber-400">
+                            Waiting for next reset
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-1">
+                            Will auto-generate in {countdown || "a few hours"}
+                          </div>
+                        </div>
+                      ) : isFailed ? (
                         <div className="p-4 text-center">
                           <div className="text-destructive text-sm font-medium">Failed</div>
                           <div className="text-xs text-muted-foreground mt-1 break-all">
@@ -334,9 +481,14 @@ export default function GalleryPage() {
                           regenerated
                         </Badge>
                       )}
+                      {isQueued && (
+                        <Badge className="text-[10px] bg-amber-500 text-black hover:bg-amber-500">
+                          queued
+                        </Badge>
+                      )}
                     </div>
 
-                    {!isFailed && (
+                    {!isFailed && !isQueued && (
                       <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition">
                         <Button
                           size="icon"

@@ -394,6 +394,51 @@ model ActivityLog {
   @@index([createdAt])
 }
 
+// Daily quota counter for external AI APIs (Gemini image, Veo, etc.)
+// One row per (provider, model, PT-date). `used` is incremented atomically.
+model QuotaUsage {
+  id        String   @id @default(cuid())
+  provider  String
+  model     String
+  date      String   // "YYYY-MM-DD" in America/Los_Angeles
+  used      Int      @default(0)
+  limit     Int
+  updatedAt DateTime @updatedAt
+
+  @@unique([provider, model, date])
+  @@index([date])
+}
+
+// Things that couldn't generate because daily quota was exhausted.
+// The scheduled drain (or manual "run queued now" button) picks these up.
+model QueuedRegeneration {
+  id            String    @id @default(cuid())
+  batchId       String
+  original      String
+  variantIndex  Int
+  prompt        String    @db.Text
+  sourceUrl     String    @db.Text
+  status        QueuedRegenStatus @default(QUEUED)
+  attempts      Int       @default(0)
+  lastError     String?   @db.Text
+  resultUrl     String?
+  resultKey     String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  completedAt   DateTime?
+
+  @@unique([batchId, original, variantIndex])
+  @@index([status, createdAt])
+  @@index([batchId])
+}
+
+enum QueuedRegenStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
 // Analytics
 model Analytics {
   id              String    @id @default(cuid())
