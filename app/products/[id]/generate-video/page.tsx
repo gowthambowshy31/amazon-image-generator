@@ -368,9 +368,9 @@ export default function GenerateVideoPage() {
                   onChange={(e) => {
                     const v = e.target.value as 'veo' | 'seedance'
                     setProvider(v)
-                    // Seedance supports 5–10s sweet spot; Veo supports 4–8s
-                    if (v === 'seedance' && duration < 5) setDuration(5)
-                    if (v === 'veo' && duration > 8) setDuration(8)
+                    // Seedance (dreamina-seedance-2-0) only accepts 5 or 10s in i2v; Veo supports 4–8s
+                    if (v === 'seedance' && duration !== 5 && duration !== 10) setDuration(5)
+                    if (v === 'veo' && (duration < 4 || duration > 8)) setDuration(5)
                   }}
                   className="mt-2 w-full px-4 py-2 bg-background border border-input rounded-lg text-foreground focus-visible:ring-1 focus-visible:ring-ring"
                 >
@@ -404,7 +404,7 @@ export default function GenerateVideoPage() {
                   className="mt-2 w-full px-4 py-2 bg-background border border-input rounded-lg text-foreground focus-visible:ring-1 focus-visible:ring-ring"
                 >
                   {(provider === 'seedance'
-                    ? [3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+                    ? [5, 10]
                     : [4, 5, 6, 7, 8]
                   ).map((s) => (
                     <option key={s} value={s}>{s} seconds</option>
