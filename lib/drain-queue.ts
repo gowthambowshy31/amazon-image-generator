@@ -23,6 +23,78 @@ export interface DrainOptions {
   gapMs?: number // delay between calls to stay under per-minute rate limits
 }
 
+/**
+ * Walk a batch's manifest and insert every variant with status !== "ok" into
+ * QueuedRegeneration (QUEUED status). Safe to run repeatedly — the unique
+ * constraint on (batchId, original, variantIndex) turns re-runs into no-ops.
+ *
+ * Returns how many rows were newly queued.
+ */
+export async function queueFailedForBatch(batchId: string): Promise<{
+  queued: number
+  skipped: number
+  reason?: string
+}> {
+  const manifest = await readManifest(batchId)
+  if (!manifest) return { queued: 0, skipped: 0, reason: "manifest not found" }
+
+  let queued = 0
+  let skipped = 0
+  for (const item of manifest.items) {
+    if (!item.originalUrl) {
+      skipped += item.variants.filter((v) => v.status !== "ok").length
+      continue
+    }
+    for (const v of item.variants) {
+      if (v.status === "ok") continue
+      try {
+        const created = await prisma.queuedRegeneration.upsert({
+          where: {
+            batchId_original_variantIndex: {
+              batchId,
+              original: item.original,
+              variantIndex: v.index,
+            },
+          },
+          create: {
+            batchId,
+            original: item.original,
+            variantIndex: v.index,
+            prompt: manifest.prompt,
+            sourceUrl: item.originalUrl,
+            lastError: v.error || "queued from backfill",
+          },
+          update: {
+            // only re-activate rows that already finished or failed permanently
+            status: "QUEUED",
+            lastError: v.error || "requeued from backfill",
+          },
+        })
+        if (created) queued++
+      } catch {
+        skipped++
+      }
+    }
+  }
+
+  // Flip the manifest variants from "failed" to "queued" so the gallery shows
+  // the amber waiting state rather than red failed.
+  const patched = {
+    ...manifest,
+    items: manifest.items.map((it) => ({
+      ...it,
+      variants: it.variants.map((v) =>
+        v.status === "ok"
+          ? v
+          : { ...v, status: "queued" as const, queuedAt: new Date().toISOString(), error: undefined }
+      ),
+    })),
+  }
+  await writeManifest(patched)
+
+  return { queued, skipped }
+}
+
 export async function drainQueue(opts: DrainOptions = {}): Promise<DrainResult> {
   const maxItems = opts.maxItems ?? 1000
   const gapMs = opts.gapMs ?? 2500

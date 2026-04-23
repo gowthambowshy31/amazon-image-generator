@@ -140,23 +140,34 @@ export default function GalleryPage() {
     return () => clearInterval(iv)
   }, [quota?.resetsAt])
 
-  const runDrain = useCallback(async () => {
-    setDrainBusy(true)
-    try {
-      const res = await fetch("/api/batch/drain", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
-      })
-      if (!res.ok) throw new Error(`Drain failed (${res.status})`)
-      await reloadManifest()
-      await reloadQueueStatus()
-    } catch (err) {
-      alert((err as Error).message)
-    } finally {
-      setDrainBusy(false)
-    }
-  }, [reloadManifest, reloadQueueStatus])
+  const runDrain = useCallback(
+    async (opts: { backfill?: boolean } = {}) => {
+      setDrainBusy(true)
+      try {
+        const res = await fetch("/api/batch/drain", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(opts.backfill ? { backfillBatch: batchId } : {}),
+        })
+        if (!res.ok) throw new Error(`Drain failed (${res.status})`)
+        const data = await res.json()
+        await reloadManifest()
+        await reloadQueueStatus()
+        if (opts.backfill) {
+          alert(
+            `Queued ${data.backfill?.queued ?? 0} failed variants. ` +
+              `Generated ${data.succeeded} in this pass. ` +
+              (data.stoppedOnQuota ? "Daily quota hit — rest will auto-generate after midnight PT." : "")
+          )
+        }
+      } catch (err) {
+        alert((err as Error).message)
+      } finally {
+        setDrainBusy(false)
+      }
+    },
+    [batchId, reloadManifest, reloadQueueStatus]
+  )
 
   useEffect(() => {
     try {
@@ -360,7 +371,7 @@ export default function GalleryPage() {
         {quota && (
           <div className="border-t border-border/40 bg-muted/40">
             <div className="mx-auto max-w-7xl px-6 py-2 flex flex-wrap items-center justify-between gap-3 text-xs">
-              <div className="flex items-center gap-4 text-muted-foreground">
+              <div className="flex items-center gap-4 text-muted-foreground flex-wrap">
                 <span className="flex items-center gap-1.5">
                   <Timer className="h-3.5 w-3.5" />
                   <strong className="text-foreground font-semibold">
@@ -368,6 +379,10 @@ export default function GalleryPage() {
                   </strong>{" "}
                   images used today
                   {countdown && <> · resets in <strong className="text-foreground">{countdown}</strong></>}
+                </span>
+                <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  Auto-generate on · runs daily at 00:30 PT
                 </span>
                 {queueCounts && queueCounts.queued > 0 && (
                   <span className="text-amber-600 dark:text-amber-400">
@@ -379,8 +394,20 @@ export default function GalleryPage() {
                 )}
               </div>
               <div className="flex items-center gap-2">
+                {stats.failed > 0 && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => runDrain({ backfill: true })}
+                    disabled={drainBusy}
+                    title="Queue every failed variant for regeneration, then drain until quota runs out"
+                  >
+                    <Play className="h-3.5 w-3.5 mr-1" />
+                    {drainBusy ? "Running…" : `Queue ${stats.failed} failed`}
+                  </Button>
+                )}
                 {queueCounts && queueCounts.queued > 0 && (
-                  <Button size="sm" variant="outline" onClick={runDrain} disabled={drainBusy || quota.remaining === 0}>
+                  <Button size="sm" onClick={() => runDrain()} disabled={drainBusy || quota.remaining === 0}>
                     <Play className="h-3.5 w-3.5 mr-1" />
                     {drainBusy ? "Running…" : "Run queued now"}
                   </Button>

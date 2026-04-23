@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { drainQueue } from "@/lib/drain-queue"
+import { drainQueue, queueFailedForBatch } from "@/lib/drain-queue"
 import { getQuotaSnapshot } from "@/lib/quota"
 import { prisma } from "@/lib/prisma"
 
@@ -9,10 +9,19 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}))
   const maxItems = typeof body?.maxItems === "number" ? body.maxItems : undefined
   const gapMs = typeof body?.gapMs === "number" ? body.gapMs : undefined
+  const backfillBatch = typeof body?.backfillBatch === "string" ? body.backfillBatch : undefined
+  const drain = body?.drain !== false // default true
 
-  const result = await drainQueue({ maxItems, gapMs })
+  let backfill: { queued: number; skipped: number; reason?: string } | undefined
+  if (backfillBatch) {
+    backfill = await queueFailedForBatch(backfillBatch)
+  }
+
+  const drainResult = drain
+    ? await drainQueue({ maxItems, gapMs })
+    : { attempted: 0, succeeded: 0, failed: 0, stoppedOnQuota: false, errors: [] }
   const quota = await getQuotaSnapshot()
-  return NextResponse.json({ ...result, quota })
+  return NextResponse.json({ ...drainResult, backfill, quota })
 }
 
 export async function GET(request: NextRequest) {
