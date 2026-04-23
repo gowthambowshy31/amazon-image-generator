@@ -75,7 +75,22 @@ async function generateFromFile(args: {
   const key = requireKey();
   const buffer = await fs.readFile(args.filePath);
   const form = new FormData();
-  form.append("image", new Blob([buffer as unknown as BlobPart]), path.basename(args.filePath));
+  const ext = path.extname(args.filePath).toLowerCase();
+  const mime =
+    ext === ".png"
+      ? "image/png"
+      : ext === ".webp"
+        ? "image/webp"
+        : ext === ".gif"
+          ? "image/gif"
+          : ext === ".bmp"
+            ? "image/bmp"
+            : "image/jpeg";
+  form.append(
+    "image",
+    new Blob([buffer as unknown as BlobPart], { type: mime }),
+    path.basename(args.filePath)
+  );
   if (args.prompt) form.append("prompt", args.prompt);
   if (args.templateId) form.append("templateId", args.templateId);
   form.append("variants", String(args.variants));

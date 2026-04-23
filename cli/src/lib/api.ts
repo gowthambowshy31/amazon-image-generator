@@ -83,11 +83,21 @@ export interface GenerateResult {
   >;
 }
 
+function mimeFromExt(filePath: string): string {
+  const ext = path.extname(filePath).toLowerCase();
+  if (ext === ".png") return "image/png";
+  if (ext === ".webp") return "image/webp";
+  if (ext === ".gif") return "image/gif";
+  if (ext === ".bmp") return "image/bmp";
+  return "image/jpeg";
+}
+
 export async function generateFromFile(args: GenerateMultipartArgs): Promise<GenerateResult> {
   const cfg = await requireConfig();
   const buffer = await fs.readFile(args.filePath);
   const form = new FormData();
-  const blob = new Blob([buffer as unknown as BlobPart]);
+  const mime = mimeFromExt(args.filePath);
+  const blob = new Blob([buffer as unknown as BlobPart], { type: mime });
   form.append("image", blob, path.basename(args.filePath));
   if (args.prompt) form.append("prompt", args.prompt);
   if (args.templateId) form.append("templateId", args.templateId);

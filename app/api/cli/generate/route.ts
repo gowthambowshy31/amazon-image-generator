@@ -13,6 +13,22 @@ function extFromMime(mime: string): string {
   return "png"
 }
 
+function mimeFromFilename(name: string): string {
+  const lower = name.toLowerCase()
+  if (lower.endsWith(".png")) return "image/png"
+  if (lower.endsWith(".webp")) return "image/webp"
+  if (lower.endsWith(".gif")) return "image/gif"
+  if (lower.endsWith(".bmp")) return "image/bmp"
+  return "image/jpeg"
+}
+
+function normalizeImageMime(raw: string | null | undefined, filename: string): string {
+  if (!raw || raw === "application/octet-stream" || !raw.startsWith("image/")) {
+    return mimeFromFilename(filename)
+  }
+  return raw
+}
+
 function applyTemplateVars(promptText: string, vars: Record<string, string>): string {
   return promptText.replace(/\{\{\s*(\w+)\s*\}\}/g, (_, name) => vars[name] ?? "")
 }
@@ -41,8 +57,8 @@ export async function POST(request: NextRequest) {
       if (file) {
         const ab = await file.arrayBuffer()
         sourceBuffer = Buffer.from(ab)
-        sourceMime = file.type || "image/jpeg"
         sourceName = file.name || "image"
+        sourceMime = normalizeImageMime(file.type, sourceName)
       }
       prompt = String(form.get("prompt") || "")
       templateId = (form.get("templateId") as string) || null
@@ -70,12 +86,12 @@ export async function POST(request: NextRequest) {
         const srcRes = await fetch(body.sourceUrl)
         if (!srcRes.ok) throw new Error(`Source fetch failed: ${srcRes.status}`)
         sourceBuffer = Buffer.from(await srcRes.arrayBuffer())
-        sourceMime = srcRes.headers.get("content-type") || "image/jpeg"
         sourceName = body.sourceName || "source"
+        sourceMime = normalizeImageMime(srcRes.headers.get("content-type"), sourceName)
       } else if (body.sourceBase64) {
         sourceBuffer = Buffer.from(body.sourceBase64, "base64")
-        sourceMime = body.sourceMime || "image/jpeg"
         sourceName = body.sourceName || "source"
+        sourceMime = normalizeImageMime(body.sourceMime, sourceName)
       }
     }
 
