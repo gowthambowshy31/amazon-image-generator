@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Amazon Product Image Generator",
-  description: "Generate and manage product images at scale for Amazon listings",
+  title: "Bowshai Seller Platform",
+  description: "All-in-one Amazon seller suite — image/video studio, profitability analytics, MCF channels, review automation",
 };
 
 export default function RootLayout({

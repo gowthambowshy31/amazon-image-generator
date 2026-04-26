@@ -8,6 +8,7 @@ const registerSchema = z.object({
   email: z.string().email("Invalid email address"),
   password: z.string().min(8, "Password must be at least 8 characters"),
   organizationName: z.string().min(1, "Organization name is required"),
+  inviteCode: z.string().optional(),
 })
 
 export async function POST(request: NextRequest) {
@@ -44,6 +45,25 @@ export async function POST(request: NextRequest) {
 
     const hashedPassword = await bcrypt.hash(validated.password, 12)
 
+    // Validate invite code if signup gating is enabled
+    const requireInvite = process.env.REQUIRE_INVITE_CODE === "1"
+    let inviteCode: any = null
+    if (requireInvite || validated.inviteCode) {
+      if (!validated.inviteCode) {
+        return NextResponse.json({ error: "Invite code required" }, { status: 403 })
+      }
+      inviteCode = await prisma.inviteCode.findUnique({ where: { code: validated.inviteCode } })
+      if (!inviteCode || !inviteCode.isActive) {
+        return NextResponse.json({ error: "Invalid invite code" }, { status: 403 })
+      }
+      if (inviteCode.expiresAt && inviteCode.expiresAt < new Date()) {
+        return NextResponse.json({ error: "Invite code expired" }, { status: 403 })
+      }
+      if (inviteCode.usedCount >= inviteCode.maxUses) {
+        return NextResponse.json({ error: "Invite code already used" }, { status: 403 })
+      }
+    }
+
     // Create organization and user in a transaction
     const result = await prisma.$transaction(async (tx) => {
       const organization = await tx.organization.create({
@@ -58,10 +78,18 @@ export async function POST(request: NextRequest) {
           email: validated.email,
           name: validated.name,
           password: hashedPassword,
-          role: "ADMIN",
+          role: inviteCode?.grantsAdmin ? "ADMIN" : "ADMIN", // first user is org admin
           organizationId: organization.id,
+          inviteCodeId: inviteCode?.id,
         },
       })
+
+      if (inviteCode) {
+        await tx.inviteCode.update({
+          where: { id: inviteCode.id },
+          data: { usedCount: { increment: 1 } },
+        })
+      }
 
       return { organization, user }
     })

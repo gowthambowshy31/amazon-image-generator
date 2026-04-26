@@ -11,34 +11,58 @@ datasource db {
 
 // Organization (Tenant) - one per Amazon store/company
 model Organization {
-  id              String    @id @default(cuid())
-  name            String
-  slug            String    @unique
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  users              User[]
-  products           Product[]
-  amazonConnections  AmazonConnection[]
+  users                  User[]
+  products               Product[]
+  amazonConnections      AmazonConnection[]
+  amazonAdsConnections   AmazonAdsConnection[]
+  ebayConnections        EbayConnection[]
+  reviewOrders           ReviewOrder[]
+  reviewSolicitations    ReviewSolicitation[]
+  reviewSettings         ReviewSettings?
+  channelSkus            ChannelSku[]
+  channelVariationGroups ChannelVariationGroup[]
+  mcfOrders              McfOrder[]
+  channelsSyncConfig     ChannelsSyncConfig?
+  profitReports          ProfitReport[]
+  adPerformanceDaily     AdPerformanceDaily[]
+  adCampaignDaily        AdCampaignDaily[]
+  adSyncLogs             AdSyncLog[]
+  reimbursements         Reimbursement[]
+  potentialClaims        PotentialClaim[]
+  reimbursementClaims    ReimbursementClaim[]
+  inventorySnapshots     InventorySnapshot[]
+  shipments              Shipment[]
+  shipmentGroups         ShipmentGroup[]
+  productCatalog         ProductCatalog[]
+  currentInventory       CurrentInventory[]
+  purchaseOrders         PurchaseOrder[]
+  jobs                   Job[]
+  syncLogs               SyncLog[]
 }
 
 // Amazon OAuth Connection - per-org Amazon seller credentials
 model AmazonConnection {
-  id              String    @id @default(cuid())
-  organizationId  String
-  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  sellerId        String
-  marketplaceId   String    @default("ATVPDKIKX0DER")
-  region          String    @default("na")
-  refreshToken    String    @db.Text  // encrypted
-  accessToken     String?   @db.Text
-  tokenExpiresAt  DateTime?
-  clientId        String?   @db.Text  // per-connection SP-API app client_id (falls back to env)
-  clientSecret    String?   @db.Text  // encrypted SP-API app client_secret
-  storeName       String?
-  isActive        Boolean   @default(true)
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sellerId       String
+  marketplaceId  String       @default("ATVPDKIKX0DER")
+  region         String       @default("na")
+  refreshToken   String       @db.Text // encrypted
+  accessToken    String?      @db.Text
+  tokenExpiresAt DateTime?
+  clientId       String?      @db.Text // per-connection SP-API app client_id (falls back to env)
+  clientSecret   String?      @db.Text // encrypted SP-API app client_secret
+  storeName      String?
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 
   @@unique([organizationId, sellerId])
   @@index([organizationId])
@@ -46,37 +70,121 @@ model AmazonConnection {
 
 // User Management
 model User {
-  id              String    @id @default(cuid())
-  email           String    @unique
-  name            String?
-  password        String
-  role            UserRole  @default(CLIENT)
-  organizationId  String?
-  organization    Organization? @relation(fields: [organizationId], references: [id])
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id             String        @id @default(cuid())
+  email          String        @unique
+  name           String?
+  password       String? // optional — null when user signed up via OAuth / magic link
+  image          String? // avatar from OAuth providers
+  emailVerified  DateTime? // populated on magic-link verification or OAuth callback
+  role           UserRole      @default(CLIENT)
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+  inviteCodeId   String?
+  inviteCode     InviteCode?   @relation(fields: [inviteCodeId], references: [id])
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  lastLoginAt    DateTime?
 
-  products      Product[]
-  images        GeneratedImage[]
-  videos        GeneratedVideo[]
-  comments      Comment[]
-  activityLogs  ActivityLog[]
-  apiKeys       ApiKey[]
+  products            Product[]
+  images              GeneratedImage[]
+  videos              GeneratedVideo[]
+  comments            Comment[]
+  activityLogs        ActivityLog[]
+  apiKeys             ApiKey[]
+  accounts            Account[]
+  sessions            Session[]
+  reimbursementClaims ReimbursementClaim[]
 
   @@index([organizationId])
 }
 
+// NextAuth — OAuth provider links
+model Account {
+  id                       String  @id @default(cuid())
+  userId                   String
+  type                     String
+  provider                 String
+  providerAccountId        String
+  refresh_token            String? @db.Text
+  access_token             String? @db.Text
+  expires_at               Int?
+  token_type               String?
+  scope                    String?
+  id_token                 String? @db.Text
+  session_state            String?
+  user                     User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refresh_token_expires_in Int?
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+// NextAuth — DB-backed sessions (used when not on JWT, but kept for adapter)
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// NextAuth — magic-link verification tokens
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// Invite code gating for signup
+model InviteCode {
+  id          String    @id @default(cuid())
+  code        String    @unique
+  maxUses     Int       @default(1)
+  usedCount   Int       @default(0)
+  expiresAt   DateTime?
+  grantsAdmin Boolean   @default(false)
+  isActive    Boolean   @default(true)
+  notes       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  users User[]
+
+  @@index([code])
+  @@index([isActive])
+}
+
+// Waitlist (pre-launch signups)
+model Waitlist {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  name         String?
+  company      String?
+  status       String    @default("pending") // pending | approved | rejected
+  inviteCodeId String?
+  reviewedAt   DateTime?
+  reviewedBy   String?
+  note         String?
+  createdAt    DateTime  @default(now())
+
+  @@index([status])
+}
+
 // API Keys for CLI / MCP / programmatic access
 model ApiKey {
-  id              String    @id @default(cuid())
-  userId          String
-  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  name            String
-  keyHash         String    @unique
-  keyPrefix       String
-  lastUsedAt      DateTime?
-  revokedAt       DateTime?
-  createdAt       DateTime  @default(now())
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name       String
+  keyHash    String    @unique
+  keyPrefix  String
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
 
   @@index([userId])
   @@index([keyHash])
@@ -91,26 +199,26 @@ enum UserRole {
 
 // Product Management
 model Product {
-  id              String    @id @default(cuid())
-  asin            String?   @unique
-  title           String
-  category        String?
-  status          ProductStatus @default(NOT_STARTED)
-  tags            String[]
-  metadata        Json?
+  id               String        @id @default(cuid())
+  asin             String?       @unique
+  title            String
+  category         String?
+  status           ProductStatus @default(NOT_STARTED)
+  tags             String[]
+  metadata         Json?
   originalImageUrl String?
-  createdById     String
-  createdBy       User      @relation(fields: [createdById], references: [id])
-  organizationId  String?
-  organization    Organization? @relation(fields: [organizationId], references: [id])
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  createdById      String
+  createdBy        User          @relation(fields: [createdById], references: [id])
+  organizationId   String?
+  organization     Organization? @relation(fields: [organizationId], references: [id])
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
 
-  images              GeneratedImage[]
-  videos              GeneratedVideo[]
-  promptOverrides     PromptOverride[]
-  videoPromptOverrides VideoPromptOverride[]
-  sourceImages        SourceImage[]
+  images                 GeneratedImage[]
+  videos                 GeneratedVideo[]
+  promptOverrides        PromptOverride[]
+  videoPromptOverrides   VideoPromptOverride[]
+  sourceImages           SourceImage[]
   amazonImagePushHistory AmazonImagePush[]
 
   @@index([organizationId])
@@ -118,18 +226,18 @@ model Product {
 
 // Source Images from Amazon
 model SourceImage {
-  id              String    @id @default(cuid())
-  productId       String
-  product         Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
-  amazonImageUrl  String
-  localFilePath   String?
-  imageOrder      Int       @default(0)
-  width           Int?
-  height          Int?
-  fileSize        Int?
-  variant         String?   // MAIN, PT01, PT02, etc.
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id             String   @id @default(cuid())
+  productId      String
+  product        Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  amazonImageUrl String
+  localFilePath  String?
+  imageOrder     Int      @default(0)
+  width          Int?
+  height         Int?
+  fileSize       Int?
+  variant        String? // MAIN, PT01, PT02, etc.
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   generatedImages GeneratedImage[]
   generatedVideos GeneratedVideo[]
@@ -145,13 +253,13 @@ enum ProductStatus {
 
 // Image Type Templates
 model ImageType {
-  id              String    @id @default(cuid())
-  name            String    @unique
-  description     String?
-  order           Int       @default(0)
-  defaultPrompt   String    @db.Text
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id            String   @id @default(cuid())
+  name          String   @unique
+  description   String?
+  order         Int      @default(0)
+  defaultPrompt String   @db.Text
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   images          GeneratedImage[]
   promptOverrides PromptOverride[]
@@ -160,71 +268,71 @@ model ImageType {
 
 // Prompt Version Control
 model PromptVersion {
-  id              String    @id @default(cuid())
-  imageTypeId     String
-  imageType       ImageType @relation(fields: [imageTypeId], references: [id], onDelete: Cascade)
-  promptText      String    @db.Text
-  version         Int
-  isActive        Boolean   @default(false)
-  changeNote      String?
-  createdAt       DateTime  @default(now())
+  id          String    @id @default(cuid())
+  imageTypeId String
+  imageType   ImageType @relation(fields: [imageTypeId], references: [id], onDelete: Cascade)
+  promptText  String    @db.Text
+  version     Int
+  isActive    Boolean   @default(false)
+  changeNote  String?
+  createdAt   DateTime  @default(now())
 
   @@index([imageTypeId, version])
 }
 
 // Product-specific prompt overrides
 model PromptOverride {
-  id              String    @id @default(cuid())
-  productId       String
-  product         Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
-  imageTypeId     String
-  imageType       ImageType @relation(fields: [imageTypeId], references: [id], onDelete: Cascade)
-  customPrompt    String    @db.Text
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id           String    @id @default(cuid())
+  productId    String
+  product      Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  imageTypeId  String
+  imageType    ImageType @relation(fields: [imageTypeId], references: [id], onDelete: Cascade)
+  customPrompt String    @db.Text
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   @@unique([productId, imageTypeId])
 }
 
 // Generated Images
 model GeneratedImage {
-  id              String    @id @default(cuid())
-  productId       String
-  product         Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
-  imageTypeId     String?
-  imageType       ImageType? @relation(fields: [imageTypeId], references: [id])
-  templateId      String?
-  template        PromptTemplate? @relation(fields: [templateId], references: [id])
-  templateName    String?
-  sourceImageId   String?
-  sourceImage     SourceImage? @relation(fields: [sourceImageId], references: [id])
-  version         Int       @default(1)
-  status          ImageStatus @default(PENDING)
-  filePath        String
-  fileName        String
-  fileSize        Int?
-  width           Int?
-  height          Int?
-  promptUsed      String    @db.Text
-  aiModel         String    @default("gemini")
+  id               String           @id @default(cuid())
+  productId        String
+  product          Product          @relation(fields: [productId], references: [id], onDelete: Cascade)
+  imageTypeId      String?
+  imageType        ImageType?       @relation(fields: [imageTypeId], references: [id])
+  templateId       String?
+  template         PromptTemplate?  @relation(fields: [templateId], references: [id])
+  templateName     String?
+  sourceImageId    String?
+  sourceImage      SourceImage?     @relation(fields: [sourceImageId], references: [id])
+  version          Int              @default(1)
+  status           ImageStatus      @default(PENDING)
+  filePath         String
+  fileName         String
+  fileSize         Int?
+  width            Int?
+  height           Int?
+  promptUsed       String           @db.Text
+  aiModel          String           @default("gemini")
   generationParams Json?
-  parentImageId   String?
-  parentImage     GeneratedImage? @relation("ImageVersions", fields: [parentImageId], references: [id])
-  childImages     GeneratedImage[] @relation("ImageVersions")
-  isPrimary       Boolean   @default(false)
-  generatedById   String
-  generatedBy     User      @relation(fields: [generatedById], references: [id])
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  parentImageId    String?
+  parentImage      GeneratedImage?  @relation("ImageVersions", fields: [parentImageId], references: [id])
+  childImages      GeneratedImage[] @relation("ImageVersions")
+  isPrimary        Boolean          @default(false)
+  generatedById    String
+  generatedBy      User             @relation(fields: [generatedById], references: [id])
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
 
   comments        Comment[]
   generatedVideos GeneratedVideo[]
 
   // Amazon Push Tracking
-  amazonSlot           String?
-  amazonPushedAt       DateTime?
-  amazonPushStatus     AmazonPushStatus?
-  amazonPushHistory    AmazonImagePush[]
+  amazonSlot        String?
+  amazonPushedAt    DateTime?
+  amazonPushStatus  AmazonPushStatus?
+  amazonPushHistory AmazonImagePush[]
 
   @@index([productId, imageTypeId])
   @@index([productId, templateId])
@@ -251,13 +359,13 @@ enum AmazonPushStatus {
 
 // Video Type Templates
 model VideoType {
-  id              String    @id @default(cuid())
-  name            String    @unique
-  description     String?
-  order           Int       @default(0)
-  defaultPrompt   String    @db.Text
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id            String   @id @default(cuid())
+  name          String   @unique
+  description   String?
+  order         Int      @default(0)
+  defaultPrompt String   @db.Text
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   videos          GeneratedVideo[]
   promptOverrides VideoPromptOverride[]
@@ -266,57 +374,57 @@ model VideoType {
 
 // Video Prompt Version Control
 model VideoPromptVersion {
-  id              String    @id @default(cuid())
-  videoTypeId     String
-  videoType       VideoType @relation(fields: [videoTypeId], references: [id], onDelete: Cascade)
-  promptText      String    @db.Text
-  version         Int
-  isActive        Boolean   @default(false)
-  changeNote      String?
-  createdAt       DateTime  @default(now())
+  id          String    @id @default(cuid())
+  videoTypeId String
+  videoType   VideoType @relation(fields: [videoTypeId], references: [id], onDelete: Cascade)
+  promptText  String    @db.Text
+  version     Int
+  isActive    Boolean   @default(false)
+  changeNote  String?
+  createdAt   DateTime  @default(now())
 
   @@index([videoTypeId, version])
 }
 
 // Product-specific video prompt overrides
 model VideoPromptOverride {
-  id              String    @id @default(cuid())
-  productId       String
-  product         Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
-  videoTypeId     String
-  videoType       VideoType @relation(fields: [videoTypeId], references: [id], onDelete: Cascade)
-  customPrompt    String    @db.Text
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id           String    @id @default(cuid())
+  productId    String
+  product      Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  videoTypeId  String
+  videoType    VideoType @relation(fields: [videoTypeId], references: [id], onDelete: Cascade)
+  customPrompt String    @db.Text
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   @@unique([productId, videoTypeId])
 }
 
 // Generated Videos
 model GeneratedVideo {
-  id                    String    @id @default(cuid())
-  productId             String
-  product               Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
-  videoTypeId           String?
-  videoType             VideoType? @relation(fields: [videoTypeId], references: [id])
-  sourceImageId         String?
-  sourceImage           SourceImage? @relation(fields: [sourceImageId], references: [id])
-  generatedImageId      String?
-  generatedImage        GeneratedImage? @relation(fields: [generatedImageId], references: [id])
-  status                VideoStatus @default(PENDING)
-  filePath              String?
-  fileName              String?
-  fileSize              Int?
-  promptUsed            String    @db.Text
-  aiModel               String    @default("veo-3.1")
-  operationName         String?
-  aspectRatio           String    @default("16:9")
-  durationSeconds       Int       @default(4)
-  resolution            String    @default("720p")
-  generatedById         String
-  generatedBy           User      @relation(fields: [generatedById], references: [id])
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
+  id               String          @id @default(cuid())
+  productId        String
+  product          Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  videoTypeId      String?
+  videoType        VideoType?      @relation(fields: [videoTypeId], references: [id])
+  sourceImageId    String?
+  sourceImage      SourceImage?    @relation(fields: [sourceImageId], references: [id])
+  generatedImageId String?
+  generatedImage   GeneratedImage? @relation(fields: [generatedImageId], references: [id])
+  status           VideoStatus     @default(PENDING)
+  filePath         String?
+  fileName         String?
+  fileSize         Int?
+  promptUsed       String          @db.Text
+  aiModel          String          @default("veo-3.1")
+  operationName    String?
+  aspectRatio      String          @default("16:9")
+  durationSeconds  Int             @default(4)
+  resolution       String          @default("720p")
+  generatedById    String
+  generatedBy      User            @relation(fields: [generatedById], references: [id])
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
 
   @@index([productId])
   @@index([status])
@@ -334,15 +442,15 @@ enum VideoStatus {
 
 // Comments and Feedback
 model Comment {
-  id              String    @id @default(cuid())
-  imageId         String
-  image           GeneratedImage @relation(fields: [imageId], references: [id], onDelete: Cascade)
-  userId          String
-  user            User      @relation(fields: [userId], references: [id])
-  content         String    @db.Text
-  issueTag        String?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id        String         @id @default(cuid())
+  imageId   String
+  image     GeneratedImage @relation(fields: [imageId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User           @relation(fields: [userId], references: [id])
+  content   String         @db.Text
+  issueTag  String?
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
 
   @@index([imageId])
 }
@@ -380,14 +488,14 @@ enum JobStatus {
 
 // Activity Logs
 model ActivityLog {
-  id              String    @id @default(cuid())
-  userId          String
-  user            User      @relation(fields: [userId], references: [id])
-  action          String
-  entityType      String
-  entityId        String?
-  metadata        Json?
-  createdAt       DateTime  @default(now())
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  action     String
+  entityType String
+  entityId   String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
 
   @@index([userId])
   @@index([entityType, entityId])
@@ -400,7 +508,7 @@ model QuotaUsage {
   id        String   @id @default(cuid())
   provider  String
   model     String
-  date      String   // "YYYY-MM-DD" in America/Los_Angeles
+  date      String // "YYYY-MM-DD" in America/Los_Angeles
   used      Int      @default(0)
   limit     Int
   updatedAt DateTime @updatedAt
@@ -412,20 +520,20 @@ model QuotaUsage {
 // Things that couldn't generate because daily quota was exhausted.
 // The scheduled drain (or manual "run queued now" button) picks these up.
 model QueuedRegeneration {
-  id            String    @id @default(cuid())
-  batchId       String
-  original      String
-  variantIndex  Int
-  prompt        String    @db.Text
-  sourceUrl     String    @db.Text
-  status        QueuedRegenStatus @default(QUEUED)
-  attempts      Int       @default(0)
-  lastError     String?   @db.Text
-  resultUrl     String?
-  resultKey     String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  completedAt   DateTime?
+  id           String            @id @default(cuid())
+  batchId      String
+  original     String
+  variantIndex Int
+  prompt       String            @db.Text
+  sourceUrl    String            @db.Text
+  status       QueuedRegenStatus @default(QUEUED)
+  attempts     Int               @default(0)
+  lastError    String?           @db.Text
+  resultUrl    String?
+  resultKey    String?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  completedAt  DateTime?
 
   @@unique([batchId, original, variantIndex])
   @@index([status, createdAt])
@@ -441,29 +549,29 @@ enum QueuedRegenStatus {
 
 // Analytics
 model Analytics {
-  id              String    @id @default(cuid())
-  date            DateTime  @default(now())
-  imagesGenerated Int       @default(0)
-  imagesApproved  Int       @default(0)
-  imagesRejected  Int       @default(0)
+  id                String   @id @default(cuid())
+  date              DateTime @default(now())
+  imagesGenerated   Int      @default(0)
+  imagesApproved    Int      @default(0)
+  imagesRejected    Int      @default(0)
   averageIterations Float?
-  totalCost       Float?
-  metadata        Json?
+  totalCost         Float?
+  metadata          Json?
 
   @@index([date])
 }
 
 // Prompt Templates with variables
 model PromptTemplate {
-  id            String    @id @default(cuid())
-  name          String    @unique
-  description   String?
-  promptText    String    @db.Text
-  category      String    @default("both") // "image" | "video" | "both"
-  isActive      Boolean   @default(true)
-  order         Int       @default(0)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  promptText  String   @db.Text
+  category    String   @default("both") // "image" | "video" | "both"
+  isActive    Boolean  @default(true)
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   variables       TemplateVariable[]
   usageHistory    TemplateUsage[]
@@ -472,17 +580,17 @@ model PromptTemplate {
 
 // Variables defined for each template
 model TemplateVariable {
-  id              String    @id @default(cuid())
-  templateId      String
-  template        PromptTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
-  name            String
-  displayName     String
-  type            VariableType @default(TEXT)
-  isRequired      Boolean   @default(true)
-  defaultValue    String?
-  options         String[]
-  autoFillSource  String?
-  order           Int       @default(0)
+  id             String         @id @default(cuid())
+  templateId     String
+  template       PromptTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  name           String
+  displayName    String
+  type           VariableType   @default(TEXT)
+  isRequired     Boolean        @default(true)
+  defaultValue   String?
+  options        String[]
+  autoFillSource String?
+  order          Int            @default(0)
 
   @@unique([templateId, name])
   @@index([templateId])
@@ -496,16 +604,707 @@ enum VariableType {
 
 // Track template usage for analytics
 model TemplateUsage {
-  id              String    @id @default(cuid())
+  id              String         @id @default(cuid())
   templateId      String
   template        PromptTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
   productId       String?
   variableValues  Json
-  generatedPrompt String    @db.Text
-  createdAt       DateTime  @default(now())
+  generatedPrompt String         @db.Text
+  createdAt       DateTime       @default(now())
 
   @@index([templateId])
   @@index([createdAt])
+}
+
+// ============================================================================
+// Amazon Ads API connection (separate from SP-API — different scopes/tokens)
+// ============================================================================
+model AmazonAdsConnection {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  profileId      String // advertising profile id
+  profileName    String?
+  marketplace    String?
+  region         String       @default("na")
+  clientId       String?      @db.Text
+  clientSecret   String?      @db.Text
+  refreshToken   String       @db.Text
+  accessToken    String?      @db.Text
+  tokenExpiresAt DateTime?
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([organizationId, profileId])
+  @@index([organizationId])
+}
+
+// ============================================================================
+// eBay connection (for Channels module)
+// ============================================================================
+model EbayConnection {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String       @default("default")
+  environment    String       @default("production") // sandbox | production
+  clientId       String?      @db.Text
+  clientSecret   String?      @db.Text
+  devId          String?
+  redirectUri    String?
+  refreshToken   String?      @db.Text
+  accessToken    String?      @db.Text
+  tokenExpiresAt DateTime?
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+}
+
+// ============================================================================
+// Unified background job (replaces sync_jobs / cross-module sync state)
+// ============================================================================
+model Job {
+  id              String       @id @default(cuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  type            String // "ads_sync", "reviews_sync", "mcf_inventory_sync", etc.
+  label           String?
+  status          JobStatus    @default(QUEUED)
+  progress        Int          @default(0) // 0..100
+  progressMessage String?
+  params          Json?
+  result          Json?
+  errorMessage    String?      @db.Text
+  startedAt       DateTime?
+  completedAt     DateTime?
+  triggeredBy     String? // userId or "cron"
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@index([organizationId, type])
+  @@index([organizationId, status])
+  @@index([createdAt])
+}
+
+// Generic per-module sync log (replaces module-specific log tables)
+model SyncLog {
+  id               String       @id @default(cuid())
+  organizationId   String
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  module           String // "reviews" | "channels" | "profit"
+  syncType         String // e.g. "orders", "refunds", "ads_perf"
+  status           String // "started" | "done" | "failed"
+  recordsProcessed Int          @default(0)
+  recordsCreated   Int          @default(0)
+  recordsUpdated   Int          @default(0)
+  errors           Int          @default(0)
+  errorDetails     String?      @db.Text
+  durationMs       Int?
+  startedAt        DateTime     @default(now())
+  completedAt      DateTime?
+
+  @@index([organizationId, module])
+  @@index([organizationId, syncType])
+  @@index([startedAt])
+}
+
+// ============================================================================
+// REVIEWS MODULE — Amazon Request-a-Review automation
+// ============================================================================
+model ReviewSettings {
+  id                 String       @id @default(cuid())
+  organizationId     String       @unique
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sendAfterDays      Int          @default(5)
+  autoSolicitEnabled Boolean      @default(true)
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+}
+
+model ReviewOrder {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  amazonOrderId      String
+  purchaseDate       DateTime
+  orderStatus        String
+  fulfillmentChannel String?
+  orderTotal         String?
+  buyerInfo          String?
+
+  earliestShipDate     DateTime?
+  latestShipDate       DateTime?
+  earliestDeliveryDate DateTime?
+  latestDeliveryDate   DateTime?
+
+  isEligible           Boolean   @default(false)
+  eligibilityCheckedAt DateTime?
+  isRefunded           Boolean   @default(false)
+  refundCheckedAt      DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  solicitation ReviewSolicitation?
+
+  @@unique([organizationId, amazonOrderId])
+  @@index([organizationId])
+  @@index([organizationId, orderStatus])
+  @@index([organizationId, isEligible])
+  @@index([organizationId, isEligible, isRefunded])
+  @@index([amazonOrderId])
+}
+
+model ReviewSolicitation {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  orderId String      @unique
+  order   ReviewOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  amazonOrderId String
+  status        String @default("PENDING")
+
+  httpStatusCode  Int?
+  requestId       String?
+  rateLimitValue  String?
+  responseBody    String? @db.Text
+  responseHeaders String? @db.Text
+
+  errorCode    String?
+  errorMessage String? @db.Text
+
+  sentAt     DateTime?
+  retryCount Int       @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([organizationId, status])
+  @@index([amazonOrderId])
+  @@index([sentAt])
+}
+
+// ============================================================================
+// CHANNELS MODULE — Amazon → eBay MCF sync
+// ============================================================================
+model ChannelsSyncConfig {
+  id               String       @id @default(cuid())
+  organizationId   String       @unique
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  quantityBuffer   Int          @default(5)
+  syncIntervalMins Int          @default(30)
+  orderPollMins    Int          @default(15)
+  autoSyncEnabled  Boolean      @default(true)
+  shippingSpeed    String       @default("Standard")
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+}
+
+model ChannelVariationGroup {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  amazonParentAsin String
+
+  title       String?
+  description String?  @db.Text
+  imageUrls   String[] @default([])
+  brand       String?
+
+  ebayGroupKey   String?
+  ebayListingId  String?
+  ebayCategoryId String?
+  variesBy       String[] @default([])
+
+  migrationStatus String?   @default("not_started")
+  migrationError  String?   @db.Text
+  migratedAt      DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  skus ChannelSku[]
+
+  @@unique([organizationId, amazonParentAsin])
+  @@index([migrationStatus])
+}
+
+model ChannelSku {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  amazonSku  String
+  amazonAsin String?
+  ebaySku    String?
+  ebayItemId String?
+
+  title       String?
+  description String?  @db.Text
+  imageUrl    String?
+  imageUrls   String[] @default([])
+  brand       String?
+  price       Float?
+  currency    String?  @default("USD")
+
+  ebayOfferId    String?
+  ebayCategoryId String?
+
+  variationGroupId    String?
+  variationGroup      ChannelVariationGroup? @relation(fields: [variationGroupId], references: [id])
+  variationAttributes Json?                  @default("{}")
+  customAspects       Json?                  @default("{}")
+  isVariation         Boolean                @default(false)
+
+  migrationStatus String?   @default("not_started")
+  migrationError  String?   @db.Text
+  migratedAt      DateTime?
+
+  amazonQuantity Int       @default(0)
+  ebayQuantity   Int       @default(0)
+  lastSyncedAt   DateTime?
+  lastSyncError  String?   @db.Text
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  mcfOrderItems McfOrderItem[]
+
+  @@unique([organizationId, amazonSku])
+  @@index([organizationId, amazonAsin])
+  @@index([ebayItemId])
+  @@index([ebaySku])
+  @@index([migrationStatus])
+  @@index([variationGroupId])
+}
+
+model McfOrder {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  ebayOrderId         String  @unique
+  ebayBuyerUsername   String?
+  amazonFulfillmentId String?
+
+  status String @default("pending")
+
+  shippingName    String?
+  shippingLine1   String?
+  shippingLine2   String?
+  shippingCity    String?
+  shippingState   String?
+  shippingZip     String?
+  shippingCountry String?
+  shippingPhone   String?
+
+  trackingNumber String?
+  carrierCode    String?
+
+  totalPrice Float?
+  currency   String? @default("USD")
+
+  errorMessage String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items McfOrderItem[]
+
+  @@index([organizationId])
+  @@index([organizationId, status])
+  @@index([amazonFulfillmentId])
+}
+
+model McfOrderItem {
+  id           String      @id @default(cuid())
+  mcfOrderId   String
+  mcfOrder     McfOrder    @relation(fields: [mcfOrderId], references: [id], onDelete: Cascade)
+  channelSkuId String?
+  channelSku   ChannelSku? @relation(fields: [channelSkuId], references: [id])
+
+  amazonSku      String
+  ebaySku        String?
+  ebayLineItemId String?
+  quantity       Int
+
+  @@index([mcfOrderId])
+}
+
+// ============================================================================
+// PROFIT MODULE — Amazon ads + reports + reimbursements + inventory + POs
+// ============================================================================
+
+// ----- P&L profitability reports (uploaded Excel) -----
+model ProfitReport {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  filename       String
+  reportDate     DateTime?
+  fromDate       DateTime?
+  toDate         DateTime?
+  totalRows      Int          @default(0)
+  uploadedAt     DateTime     @default(now())
+
+  products ProfitReportProduct[]
+
+  @@unique([organizationId, filename])
+  @@index([organizationId, reportDate])
+}
+
+model ProfitReportProduct {
+  id         String       @id @default(cuid())
+  reportId   String
+  report     ProfitReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  asin       String?
+  sku        String
+  parentAsin String?
+  // 100+ raw columns kept as JSON to avoid schema bloat
+  metrics    Json
+
+  createdAt DateTime @default(now())
+
+  @@index([reportId])
+  @@index([asin])
+  @@index([sku])
+}
+
+// ----- Advertising performance -----
+model AdPerformanceDaily {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  date           DateTime // truncated to day
+
+  impressions Int   @default(0)
+  clicks      Int   @default(0)
+  spend       Float @default(0)
+  adSales7d   Float @default(0)
+  adSales14d  Float @default(0)
+  adSales30d  Float @default(0)
+  adUnits7d   Int   @default(0)
+  adOrders7d  Int   @default(0)
+
+  totalSales  Float?
+  totalUnits  Int?
+  totalOrders Int?
+
+  acos7d Float?
+  tacos  Float?
+
+  spSpend Float @default(0)
+  spSales Float @default(0)
+  sbSpend Float @default(0)
+  sbSales Float @default(0)
+  sdSpend Float @default(0)
+  sdSales Float @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, date])
+  @@index([organizationId, date])
+}
+
+model AdCampaignDaily {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  date           DateTime
+  campaignId     String
+  campaignName   String?
+  adProduct      String // SPONSORED_PRODUCTS | SPONSORED_BRANDS | SPONSORED_DISPLAY
+
+  impressions Int   @default(0)
+  clicks      Int   @default(0)
+  spend       Float @default(0)
+  sales7d     Float @default(0)
+  sales14d    Float @default(0)
+  sales30d    Float @default(0)
+  units7d     Int   @default(0)
+  orders7d    Int   @default(0)
+
+  createdAt DateTime @default(now())
+
+  @@unique([organizationId, date, campaignId])
+  @@index([organizationId, date])
+  @@index([campaignId])
+}
+
+model AdSyncLog {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  syncType       String // FULL | QUICK | DAILY
+  startDate      DateTime
+  endDate        DateTime
+  status         String       @default("PENDING")
+  rowsImported   Int          @default(0)
+  errorMessage   String?      @db.Text
+  startedAt      DateTime     @default(now())
+  completedAt    DateTime?
+
+  @@index([organizationId])
+  @@index([status])
+}
+
+// ----- Reimbursements -----
+model Reimbursement {
+  id                          String       @id @default(cuid())
+  organizationId              String
+  organization                Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  approvalDate                DateTime?
+  reimbursementId             String?
+  caseId                      String?
+  amazonOrderId               String?
+  reason                      String?
+  sku                         String?
+  fnsku                       String?
+  asin                        String?
+  productName                 String?
+  condition                   String?
+  currencyUnit                String?
+  amountPerUnit               Float?
+  amountTotal                 Float?
+  quantityReimbursedCash      Int?
+  quantityReimbursedInventory Int?
+  quantityReimbursedTotal     Int?
+  originalReimbursementId     String?
+  originalReimbursementType   String?
+  syncedAt                    DateTime     @default(now())
+
+  @@unique([organizationId, reimbursementId, sku])
+  @@index([organizationId, asin])
+  @@index([organizationId, reason])
+  @@index([organizationId, approvalDate])
+}
+
+// AI-detected potential reimbursement claims
+model PotentialClaim {
+  id                 String       @id @default(cuid())
+  organizationId     String
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  claimType          String
+  detectionAlgorithm String
+  asin               String?
+  sku                String?
+  fnsku              String?
+  productName        String?
+  description        String?      @db.Text
+  estimatedValue     Float?
+  quantity           Int          @default(1)
+  evidenceData       Json?
+  amazonOrderId      String?
+  reimbursementId    String?
+  referenceId        String?
+  incidentDate       DateTime?
+  claimDeadline      DateTime?
+  status             String       @default("DETECTED")
+  caseId             String?
+  filedDate          DateTime?
+  resolutionDate     DateTime?
+  resolutionAmount   Float?
+  notes              String?      @db.Text
+  detectedAt         DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  @@index([organizationId, status])
+  @@index([organizationId, claimDeadline])
+  @@index([organizationId, asin])
+  @@index([organizationId, claimType])
+}
+
+// User-tracked reimbursement claims
+model ReimbursementClaim {
+  id               String       @id @default(cuid())
+  organizationId   String
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId           String?
+  user             User?        @relation(fields: [userId], references: [id])
+  asin             String?
+  productName      String?
+  description      String?      @db.Text
+  estimatedValue   Float?
+  claimType        String?
+  status           String       @default("pending")
+  amazonOrderId    String?
+  referenceId      String?
+  incidentDate     DateTime?
+  claimDeadline    DateTime?
+  filedAt          DateTime?
+  resolvedAt       DateTime?
+  resolutionAmount Float?
+  notes            String?      @db.Text
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  @@index([organizationId, status])
+  @@index([organizationId, asin])
+}
+
+// ----- Inventory -----
+model InventorySnapshot {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  snapshotDate   DateTime
+  source         String       @default("sp_api")
+  totalAsins     Int          @default(0)
+  totalUnits     Int          @default(0)
+  notes          String?
+  createdAt      DateTime     @default(now())
+
+  items InventorySnapshotItem[]
+
+  @@index([organizationId, snapshotDate])
+}
+
+model InventorySnapshotItem {
+  id               String            @id @default(cuid())
+  snapshotId       String
+  snapshot         InventorySnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+  asin             String
+  sku              String?
+  fnsku            String?
+  productName      String?
+  fulfillableQty   Int               @default(0)
+  reservedQty      Int               @default(0)
+  inboundQty       Int               @default(0)
+  unfulfillableQty Int               @default(0)
+  totalQty         Int               @default(0)
+  createdAt        DateTime          @default(now())
+
+  @@unique([snapshotId, asin])
+  @@index([asin])
+}
+
+model ShipmentGroup {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  shipmentDate   DateTime
+  notes          String?
+  createdAt      DateTime     @default(now())
+
+  shipments Shipment[]
+
+  @@index([organizationId, shipmentDate])
+}
+
+// FIFO cost layer per product/shipment
+model Shipment {
+  id                String         @id @default(cuid())
+  organizationId    String
+  organization      Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  groupId           String?
+  group             ShipmentGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  asin              String
+  sku               String?
+  productName       String?
+  shipmentDate      DateTime
+  quantity          Int
+  costPerUnit       Float
+  remainingQuantity Int
+  notes             String?
+  createdAt         DateTime       @default(now())
+
+  @@index([organizationId, asin])
+  @@index([groupId])
+}
+
+// Master product catalog (factory + reorder thresholds)
+model ProductCatalog {
+  id                 String       @id @default(cuid())
+  organizationId     String
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  asin               String
+  parentAsin         String?
+  sku                String?
+  productName        String?
+  factorySku         String?
+  factoryName        String?
+  thresholdQty       Int          @default(0)
+  leadTimeDays       Int?
+  defaultCostPerUnit Float?
+  notes              String?      @db.Text
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  @@unique([organizationId, asin])
+  @@index([organizationId, parentAsin])
+  @@index([organizationId, factoryName])
+}
+
+// Live inventory (latest only — upserted from SP-API)
+model CurrentInventory {
+  id               String       @id @default(cuid())
+  organizationId   String
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  asin             String
+  sku              String?
+  fnsku            String?
+  productName      String?
+  fulfillableQty   Int          @default(0)
+  reservedQty      Int          @default(0)
+  inboundQty       Int          @default(0)
+  unfulfillableQty Int          @default(0)
+  totalQty         Int          @default(0)
+  lastUpdated      DateTime     @default(now())
+
+  @@unique([organizationId, asin])
+  @@index([organizationId])
+}
+
+// ----- Purchase Orders -----
+model PurchaseOrder {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  poNumber       String
+  factoryName    String
+  status         String       @default("DRAFT")
+  orderDate      DateTime?
+  expectedDate   DateTime?
+  notes          String?      @db.Text
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  items PurchaseOrderItem[]
+
+  @@unique([organizationId, poNumber])
+  @@index([organizationId, status])
+  @@index([organizationId, factoryName])
+}
+
+model PurchaseOrderItem {
+  id              String        @id @default(cuid())
+  poId            String
+  po              PurchaseOrder @relation(fields: [poId], references: [id], onDelete: Cascade)
+  asin            String
+  factorySku      String?
+  productName     String?
+  quantity        Int
+  costPerUnit     Float
+  status          String        @default("DRAFT")
+  statusUpdatedAt DateTime      @default(now())
+  notes           String?
+  createdAt       DateTime      @default(now())
+
+  @@index([poId])
+  @@index([asin])
+  @@index([status])
 }
 
 // Amazon Image Push History - tracks when images are pushed to Amazon listings
@@ -516,7 +1315,7 @@ model AmazonImagePush {
   productId        String
   product          Product          @relation(fields: [productId], references: [id], onDelete: Cascade)
   asin             String
-  amazonSlot       String           // MAIN, PT01, PT02, ... PT08
+  amazonSlot       String // MAIN, PT01, PT02, ... PT08
   imageUrl         String
   status           AmazonPushStatus @default(PENDING)
   errorMessage     String?          @db.Text
