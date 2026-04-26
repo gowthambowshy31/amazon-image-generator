@@ -8,6 +8,52 @@ interface ReportRequest {
   url?: string
 }
 
+// Per-product column lists. Amazon Ads API v3 has different valid columns per
+// adProduct/reportTypeId — using the wrong ones returns 400 with no data.
+const COLUMNS_BY_PRODUCT: Record<"SPONSORED_PRODUCTS" | "SPONSORED_BRANDS" | "SPONSORED_DISPLAY", string[]> = {
+  SPONSORED_PRODUCTS: [
+    "date",
+    "campaignId",
+    "campaignName",
+    "campaignStatus",
+    "impressions",
+    "clicks",
+    "cost",
+    "sales7d",
+    "sales14d",
+    "sales30d",
+    "unitsSoldClicks7d",
+    "purchases7d",
+    "purchases14d",
+  ],
+  SPONSORED_BRANDS: [
+    "date",
+    "campaignId",
+    "campaignName",
+    "campaignStatus",
+    "impressions",
+    "clicks",
+    "cost",
+    "sales",
+    "purchases",
+    "purchasesPromoted",
+    "salesPromoted",
+  ],
+  SPONSORED_DISPLAY: [
+    "date",
+    "campaignId",
+    "campaignName",
+    "campaignStatus",
+    "impressions",
+    "clicks",
+    "cost",
+    "sales",
+    "purchases",
+    "unitsSold",
+    "viewabilityRate",
+  ],
+}
+
 // Submit an async ad-product report (Sponsored Products / Brands / Display)
 async function submitAdReport(
   c: AdsCredentials,
@@ -22,19 +68,7 @@ async function submitAdReport(
     configuration: {
       adProduct,
       groupBy: ["campaign"],
-      columns: [
-        "date",
-        "campaignId",
-        "campaignName",
-        "impressions",
-        "clicks",
-        "cost",
-        "sales7d",
-        "sales14d",
-        "sales30d",
-        "unitsSoldClicks7d",
-        "purchases7d",
-      ],
+      columns: COLUMNS_BY_PRODUCT[adProduct],
       reportTypeId:
         adProduct === "SPONSORED_PRODUCTS"
           ? "spCampaigns"
@@ -52,8 +86,10 @@ async function submitAdReport(
   return resp.reportId
 }
 
+// Pick up to ~10 minutes per report (60 × 10s). Amazon ads reports usually
+// complete within 1–3 minutes for daily campaign reports.
 async function pollReport(c: AdsCredentials, reportId: string): Promise<string | null> {
-  for (let i = 0; i < 30; i++) {
+  for (let i = 0; i < 60; i++) {
     const resp = await adsApiCall<ReportRequest>(c, `/reporting/reports/${reportId}`)
     if (resp.status === "COMPLETED" && resp.url) return resp.url
     if (resp.status === "FAILED") return null
@@ -124,7 +160,16 @@ export async function syncAdsDaily(organizationId: string, daysBack: number = 7)
       console.error("[ads-sync] per-product errors:", perProductErrors)
     }
 
-    // Aggregate per (date, campaign) and per (date)
+    // Aggregate per (date, campaign) and per (date).
+    // Different ad products use different column names — normalize here.
+    const num = (v: any) => parseFloat(String(v ?? 0)) || 0
+    const int = (v: any) => parseInt(String(v ?? 0), 10) || 0
+    const pickSales = (row: any) => num(row.sales7d ?? row.sales)
+    const pickSales14 = (row: any) => num(row.sales14d ?? row.sales)
+    const pickSales30 = (row: any) => num(row.sales30d ?? row.sales)
+    const pickUnits = (row: any) => int(row.unitsSoldClicks7d ?? row.unitsSold)
+    const pickOrders = (row: any) => int(row.purchases7d ?? row.purchases)
+
     const dailyAgg = new Map<string, any>()
     for (const { adProduct, rows } of allRows) {
       for (const row of rows) {
@@ -147,25 +192,25 @@ export async function syncAdsDaily(organizationId: string, daysBack: number = 7)
               campaignId,
               campaignName: row.campaignName,
               adProduct,
-              impressions: parseInt(String(row.impressions || 0), 10),
-              clicks: parseInt(String(row.clicks || 0), 10),
-              spend: parseFloat(String(row.cost || 0)),
-              sales7d: parseFloat(String(row.sales7d || 0)),
-              sales14d: parseFloat(String(row.sales14d || 0)),
-              sales30d: parseFloat(String(row.sales30d || 0)),
-              units7d: parseInt(String(row.unitsSoldClicks7d || 0), 10),
-              orders7d: parseInt(String(row.purchases7d || 0), 10),
+              impressions: int(row.impressions),
+              clicks: int(row.clicks),
+              spend: num(row.cost),
+              sales7d: pickSales(row),
+              sales14d: pickSales14(row),
+              sales30d: pickSales30(row),
+              units7d: pickUnits(row),
+              orders7d: pickOrders(row),
             },
             update: {
               campaignName: row.campaignName,
-              impressions: parseInt(String(row.impressions || 0), 10),
-              clicks: parseInt(String(row.clicks || 0), 10),
-              spend: parseFloat(String(row.cost || 0)),
-              sales7d: parseFloat(String(row.sales7d || 0)),
-              sales14d: parseFloat(String(row.sales14d || 0)),
-              sales30d: parseFloat(String(row.sales30d || 0)),
-              units7d: parseInt(String(row.unitsSoldClicks7d || 0), 10),
-              orders7d: parseInt(String(row.purchases7d || 0), 10),
+              impressions: int(row.impressions),
+              clicks: int(row.clicks),
+              spend: num(row.cost),
+              sales7d: pickSales(row),
+              sales14d: pickSales14(row),
+              sales30d: pickSales30(row),
+              units7d: pickUnits(row),
+              orders7d: pickOrders(row),
             },
           })
           totalRows++
@@ -175,16 +220,16 @@ export async function syncAdsDaily(organizationId: string, daysBack: number = 7)
           adSales7d: 0, adSales14d: 0, adSales30d: 0, adUnits7d: 0, adOrders7d: 0,
           spSpend: 0, spSales: 0, sbSpend: 0, sbSales: 0, sdSpend: 0, sdSales: 0,
         }
-        agg.impressions += parseInt(String(row.impressions || 0), 10)
-        agg.clicks += parseInt(String(row.clicks || 0), 10)
-        const spend = parseFloat(String(row.cost || 0))
-        const s7 = parseFloat(String(row.sales7d || 0))
+        const spend = num(row.cost)
+        const s7 = pickSales(row)
+        agg.impressions += int(row.impressions)
+        agg.clicks += int(row.clicks)
         agg.spend += spend
         agg.adSales7d += s7
-        agg.adSales14d += parseFloat(String(row.sales14d || 0))
-        agg.adSales30d += parseFloat(String(row.sales30d || 0))
-        agg.adUnits7d += parseInt(String(row.unitsSoldClicks7d || 0), 10)
-        agg.adOrders7d += parseInt(String(row.purchases7d || 0), 10)
+        agg.adSales14d += pickSales14(row)
+        agg.adSales30d += pickSales30(row)
+        agg.adUnits7d += pickUnits(row)
+        agg.adOrders7d += pickOrders(row)
         if (adProduct === "SPONSORED_PRODUCTS") { agg.spSpend += spend; agg.spSales += s7 }
         if (adProduct === "SPONSORED_BRANDS") { agg.sbSpend += spend; agg.sbSales += s7 }
         if (adProduct === "SPONSORED_DISPLAY") { agg.sdSpend += spend; agg.sdSales += s7 }
