@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useRef, useState, useCallback } from "react"
 import Link from "next/link"
 import TemplateSelector, { TemplateSelection } from "@/app/components/TemplateSelector"
 import DashboardLayout from "@/app/components/DashboardLayout"
@@ -122,6 +122,36 @@ export default function BulkGeneratePage() {
   const [templatesCollapsed, setTemplatesCollapsed] = useState(true)
   // Today's Gemini quota snapshot
   const [quota, setQuota] = useState<{ used: number; limit: number; remaining: number; resetsAt: string } | null>(null)
+  // Drag state for the reference image dropzone
+  const [refDragOver, setRefDragOver] = useState(false)
+  // Ref to the direct-prompt textarea so variable chips can insert at the cursor
+  const directPromptRef = useRef<HTMLTextAreaElement>(null)
+
+  // Variables the bulk-generate API substitutes per product
+  const PROMPT_VARIABLES: { token: string; label: string; example: string }[] = [
+    { token: "{{product_name}}", label: "Product name", example: "from product.title" },
+    { token: "{{asin}}", label: "ASIN", example: "e.g. B0EXAMPLE" },
+    { token: "{{category}}", label: "Category", example: "from product.category" },
+    { token: "{{product_title}}", label: "Product title (alias)", example: "same as product_name" },
+  ]
+
+  const insertVariableAtCursor = (token: string) => {
+    const el = directPromptRef.current
+    if (!el) {
+      setDirectPrompt(p => p + token)
+      return
+    }
+    const start = el.selectionStart ?? directPrompt.length
+    const end = el.selectionEnd ?? directPrompt.length
+    const next = directPrompt.slice(0, start) + token + directPrompt.slice(end)
+    setDirectPrompt(next)
+    // Restore focus + caret position after the inserted token
+    requestAnimationFrame(() => {
+      el.focus()
+      const pos = start + token.length
+      el.setSelectionRange(pos, pos)
+    })
+  }
 
   // UI state
   const [loading, setLoading] = useState(true)
@@ -732,17 +762,56 @@ export default function BulkGeneratePage() {
               {referenceImage ? (
                 <div className="flex items-center gap-3">
                   <img src={referenceImage} alt="reference" className="w-24 h-24 object-contain border border-border rounded bg-background" />
-                  <button
-                    type="button"
-                    onClick={clearReference}
-                    className="text-sm text-destructive hover:underline"
-                  >
-                    Remove reference
-                  </button>
+                  <div className="flex flex-col gap-2">
+                    <button
+                      type="button"
+                      onClick={clearReference}
+                      className="text-sm text-destructive hover:underline self-start"
+                    >
+                      Remove reference
+                    </button>
+                    <label className="inline-flex items-center gap-1 text-sm text-primary hover:underline cursor-pointer">
+                      Replace…
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={async (e) => {
+                          const f = e.target.files?.[0]
+                          if (f) await handleReferenceUpload(f)
+                          e.target.value = ""
+                        }}
+                      />
+                    </label>
+                  </div>
                 </div>
               ) : (
-                <label className="inline-flex items-center gap-2 px-3 py-2 rounded border border-input bg-background hover:bg-accent cursor-pointer text-sm">
-                  + Upload reference image
+                <label
+                  onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); if (!refDragOver) setRefDragOver(true) }}
+                  onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); setRefDragOver(true) }}
+                  onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setRefDragOver(false) }}
+                  onDrop={async (e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    setRefDragOver(false)
+                    const f = e.dataTransfer.files?.[0]
+                    if (f && f.type.startsWith("image/")) {
+                      await handleReferenceUpload(f)
+                    }
+                  }}
+                  className={`flex flex-col items-center justify-center gap-2 px-6 py-8 rounded-lg border-2 border-dashed cursor-pointer transition ${
+                    refDragOver
+                      ? "border-primary bg-primary/10"
+                      : "border-input bg-background hover:bg-accent hover:border-primary/50"
+                  }`}
+                >
+                  <svg className="w-8 h-8 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v8" />
+                  </svg>
+                  <span className="text-sm text-foreground">
+                    {refDragOver ? "Drop image to upload" : "Drop an image here, or click to browse"}
+                  </span>
+                  <span className="text-xs text-muted-foreground">PNG, JPG, WebP</span>
                   <input
                     type="file"
                     accept="image/*"
@@ -839,15 +908,39 @@ export default function BulkGeneratePage() {
                 /* Direct prompt mode */
                 <div className="bg-card border border-border rounded-lg shadow-sm p-6">
                   <h2 className="text-lg font-semibold text-foreground mb-1">Write Prompt Directly</h2>
-                  <p className="text-sm text-muted-foreground mb-4">
-                    Type your prompt here. Use variables for per-product substitution: <code className="px-1 bg-accent rounded">{"{{product_name}}"}</code> <code className="px-1 bg-accent rounded">{"{{asin}}"}</code> <code className="px-1 bg-accent rounded">{"{{category}}"}</code>
+                  <p className="text-sm text-muted-foreground mb-3">
+                    Type your prompt below. Click a variable chip to insert it at the cursor — each one is replaced per product when the bulk job runs.
                   </p>
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    {PROMPT_VARIABLES.map(v => (
+                      <button
+                        key={v.token}
+                        type="button"
+                        onClick={() => insertVariableAtCursor(v.token)}
+                        title={`${v.label} — ${v.example}`}
+                        className="text-xs px-2 py-1 rounded-md bg-accent text-foreground hover:bg-primary/20 hover:text-primary border border-border transition font-mono"
+                      >
+                        {v.token}
+                      </button>
+                    ))}
+                  </div>
                   <Textarea
+                    ref={directPromptRef}
                     value={directPrompt}
                     onChange={e => setDirectPrompt(e.target.value)}
                     placeholder="e.g. Professional product photo of {{product_name}}, white background, soft studio lighting, centered composition. Make the product appear small with plenty of negative space."
                     className="min-h-[160px] font-mono text-sm"
                   />
+                  <div className="mt-2 text-xs text-muted-foreground">
+                    Available variables:{" "}
+                    {PROMPT_VARIABLES.map((v, i) => (
+                      <span key={v.token}>
+                        <code className="px-1 bg-accent rounded">{v.token}</code>
+                        <span className="text-muted-foreground"> = {v.label.toLowerCase()}</span>
+                        {i < PROMPT_VARIABLES.length - 1 && <span> · </span>}
+                      </span>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
