@@ -28,11 +28,28 @@ const bulkGenerateSchema = z.object({
   imageTypeId: z.string().optional(),
   templateId: z.string().optional(),
   renderedPrompt: z.string().optional(),
-  customPrompt: z.string().optional()
+  customPrompt: z.string().optional(),
+  // Map of productId -> base64 data URL of a close-up reference image
+  referenceImages: z.record(z.string(), z.string()).optional()
 }).refine(
   data => data.imageTypeId || data.templateId || data.renderedPrompt || data.customPrompt,
   { message: "Must provide imageTypeId, templateId, renderedPrompt, or customPrompt" }
 )
+
+// Decode a base64 data URL ("data:image/png;base64,xxxx") and write to a temp file
+async function writeBase64ToTemp(dataUrl: string): Promise<string | null> {
+  try {
+    const m = /^data:([^;]+);base64,(.+)$/.exec(dataUrl)
+    if (!m) return null
+    const buffer = Buffer.from(m[2], 'base64')
+    const ext = m[1].includes('png') ? 'png' : m[1].includes('webp') ? 'webp' : 'jpg'
+    const tempPath = path.join(os.tmpdir(), `ref-${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`)
+    await fs.writeFile(tempPath, buffer)
+    return tempPath
+  } catch {
+    return null
+  }
+}
 
 // POST /api/images/bulk-generate-by-variant
 export async function POST(request: NextRequest) {
@@ -234,6 +251,19 @@ async function processJob(
         sourceImagePath = tempFilePath || undefined
       }
 
+      // Write close-up reference image (if provided) to temp
+      let refTempPath: string | null = null
+      const additionalSourceImagePaths: string[] = []
+      const refDataUrl = validated.referenceImages?.[product.id]
+      if (refDataUrl) {
+        refTempPath = await writeBase64ToTemp(refDataUrl)
+        if (refTempPath) {
+          additionalSourceImagePaths.push(refTempPath)
+          // Append guidance so Gemini knows the second image is a detail reference
+          promptToUse = `${promptToUse}\n\nReference: The second image is a close-up of the same product. Use it as the source of truth for fine detail, structure, and proportions. Preserve every detail visible in the close-up; do not invent or alter the design.`
+        }
+      }
+
       // Create pending image record
       const imageRecord = await prisma.generatedImage.create({
         data: {
@@ -269,12 +299,16 @@ async function processJob(
       const result = await generateImage({
         prompt: promptToUse,
         sourceImagePath,
+        additionalSourceImagePaths,
         outputPath
       })
 
-      // Clean up temp source file
+      // Clean up temp source files
       if (tempFilePath) {
         try { await fs.unlink(tempFilePath) } catch {}
+      }
+      if (refTempPath) {
+        try { await fs.unlink(refTempPath) } catch {}
       }
 
       if (!result.success) {

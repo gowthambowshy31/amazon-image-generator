@@ -8,6 +8,7 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "")
 export interface ImageGenerationParams {
   prompt: string
   sourceImagePath?: string
+  additionalSourceImagePaths?: string[]
   outputPath: string
   width?: number
   height?: number
@@ -34,6 +35,7 @@ export async function generateImage(params: ImageGenerationParams): Promise<Gene
     const {
       prompt,
       sourceImagePath,
+      additionalSourceImagePaths = [],
       outputPath,
       width = 1024,
       height = 1024,
@@ -74,29 +76,33 @@ export async function generateImage(params: ImageGenerationParams): Promise<Gene
     // Prepare content parts
     const contentParts: any[] = []
 
-    // If source image exists, add it to the request
-    if (sourceImagePath) {
-      try {
-        console.log('📸 Reading source image from:', sourceImagePath)
-        const imageBuffer = await fs.readFile(sourceImagePath)
-        const base64Image = imageBuffer.toString('base64')
-        console.log('✅ Source image loaded, size:', (imageBuffer.length / 1024).toFixed(2), 'KB')
-        console.log('📊 Base64 length:', base64Image.length)
+    // Collect all source images (primary + additional references)
+    const allSourcePaths = [
+      ...(sourceImagePath ? [sourceImagePath] : []),
+      ...additionalSourceImagePaths,
+    ]
 
-        // Add image to content parts
+    if (allSourcePaths.length === 0) {
+      console.log('ℹ️  No source image provided - using text-to-image mode')
+    }
+
+    for (let i = 0; i < allSourcePaths.length; i++) {
+      const p = allSourcePaths[i]
+      try {
+        console.log(`📸 Reading source image [${i + 1}/${allSourcePaths.length}] from:`, p)
+        const imageBuffer = await fs.readFile(p)
+        const base64Image = imageBuffer.toString('base64')
+        console.log(`✅ Source image [${i + 1}] loaded, size:`, (imageBuffer.length / 1024).toFixed(2), 'KB')
+
         contentParts.push({
           inlineData: {
             data: base64Image,
-            mimeType: 'image/png'
-          }
+            mimeType: 'image/png',
+          },
         })
-        console.log('✅ Source image added to API request')
       } catch (error) {
-        console.error('❌ Failed to read source image:', error)
-        console.log('⚠️  Continuing without source image (text-to-image mode)')
+        console.error(`❌ Failed to read source image [${i + 1}]:`, error)
       }
-    } else {
-      console.log('ℹ️  No source image provided - using text-to-image mode')
     }
 
     // Add prompt to content parts

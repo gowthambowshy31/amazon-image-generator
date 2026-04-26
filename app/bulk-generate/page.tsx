@@ -113,6 +113,8 @@ export default function BulkGeneratePage() {
   const [selectedVariant, setSelectedVariant] = useState<string>("")
   const [templateSelection, setTemplateSelection] = useState<TemplateSelection | null>(null)
   const [customPrompt, setCustomPrompt] = useState<string>("")
+  // productId -> base64 data URL of an uploaded close-up reference image (in-memory, throwaway)
+  const [referenceImages, setReferenceImages] = useState<Record<string, string>>({})
 
   // UI state
   const [loading, setLoading] = useState(true)
@@ -129,6 +131,8 @@ export default function BulkGeneratePage() {
   const [expandedJobId, setExpandedJobId] = useState<string | null>(null)
   const [jobImages, setJobImages] = useState<Record<string, JobImage[]>>({})
   const [jobImagesLoading, setJobImagesLoading] = useState<string | null>(null)
+  // Per-image action loading state ("imageId:action")
+  const [imageActionLoading, setImageActionLoading] = useState<string | null>(null)
 
   useEffect(() => {
     loadData()
@@ -200,6 +204,51 @@ export default function BulkGeneratePage() {
     }
   }
 
+  const handleImageAction = async (
+    jobId: string,
+    image: JobImage,
+    action: "smaller" | "bigger" | "regenerate"
+  ) => {
+    const key = `${image.id}:${action}`
+    if (imageActionLoading) return
+    setImageActionLoading(key)
+    try {
+      const url =
+        action === "regenerate"
+          ? `/api/images/${image.id}/regenerate`
+          : `/api/images/${image.id}/resize`
+      const body =
+        action === "regenerate"
+          ? { referenceImageBase64: referenceImages[image.product.id] || undefined }
+          : { direction: action }
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        alert(`Failed: ${err.error || res.statusText}`)
+        return
+      }
+      const newImage: JobImage = await res.json()
+      // Insert the new variant into the same job's image list, after the source image
+      setJobImages(prev => {
+        const list = prev[jobId] || []
+        const idx = list.findIndex(i => i.id === image.id)
+        const next = [...list]
+        if (idx >= 0) next.splice(idx + 1, 0, newImage)
+        else next.unshift(newImage)
+        return { ...prev, [jobId]: next }
+      })
+    } catch (e) {
+      console.error(e)
+      alert("Action failed")
+    } finally {
+      setImageActionLoading(null)
+    }
+  }
+
   const loadJobImages = async (jobId: string) => {
     if (jobImages[jobId]) {
       // Already loaded, just toggle
@@ -227,6 +276,28 @@ export default function BulkGeneratePage() {
     if (next.has(productId)) next.delete(productId)
     else next.add(productId)
     setSelectedProducts(next)
+  }
+
+  const readFileAsDataURL = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(reader.result as string)
+      reader.onerror = reject
+      reader.readAsDataURL(file)
+    })
+  }
+
+  const handleReferenceUpload = async (productId: string, file: File) => {
+    const dataUrl = await readFileAsDataURL(file)
+    setReferenceImages(prev => ({ ...prev, [productId]: dataUrl }))
+  }
+
+  const clearReference = (productId: string) => {
+    setReferenceImages(prev => {
+      const next = { ...prev }
+      delete next[productId]
+      return next
+    })
   }
 
   const toggleSelectAll = () => {
@@ -279,6 +350,12 @@ export default function BulkGeneratePage() {
         ? templateSelection.renderedPrompt + "\n\n" + customPrompt.trim()
         : templateSelection.renderedPrompt
 
+      // Only include reference images for selected products
+      const referenceImagesPayload: Record<string, string> = {}
+      for (const pid of selectedProducts) {
+        if (referenceImages[pid]) referenceImagesPayload[pid] = referenceImages[pid]
+      }
+
       const res = await fetch("/api/images/bulk-generate-by-variant", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -286,7 +363,8 @@ export default function BulkGeneratePage() {
           productIds: Array.from(selectedProducts),
           variant: selectedVariant,
           templateId: templateSelection.templateId,
-          renderedPrompt
+          renderedPrompt,
+          referenceImages: Object.keys(referenceImagesPayload).length > 0 ? referenceImagesPayload : undefined
         })
       })
 
@@ -566,35 +644,70 @@ export default function BulkGeneratePage() {
                     </div>
                   </div>
                   <div className="grid grid-cols-3 md:grid-cols-6 lg:grid-cols-8 gap-2 max-h-80 overflow-y-auto">
-                    {previewImages.map((item) => (
-                      <div
-                        key={item.productId}
-                        onClick={() => toggleProduct(item.productId)}
-                        className={`relative border-2 rounded p-1 cursor-pointer transition-all ${
-                          item.selected
-                            ? "border-success bg-success/10"
-                            : "border-border bg-card hover:border-input"
-                        }`}
-                      >
-                        <img
-                          src={item.image.localFilePath?.startsWith('http') ? item.image.localFilePath : item.image.localFilePath ? `/api${item.image.localFilePath}` : item.image.amazonImageUrl}
-                          alt={item.title}
-                          className={`w-full h-24 object-contain transition-all ${
-                            item.selected ? "" : "opacity-40 grayscale"
+                    {previewImages.map((item) => {
+                      const ref = referenceImages[item.productId]
+                      return (
+                        <div
+                          key={item.productId}
+                          className={`relative border-2 rounded p-1 transition-all ${
+                            item.selected
+                              ? "border-success bg-success/10"
+                              : "border-border bg-card hover:border-input"
                           }`}
-                        />
-                        <p className={`text-xs truncate mt-1 ${
-                          item.selected ? "text-muted-foreground" : "text-muted-foreground"
-                        }`}>
-                          {item.asin || item.title.substring(0, 15)}
-                        </p>
-                        {item.selected && (
-                          <div className="absolute top-0.5 right-0.5 bg-success text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">
-                            &#10003;
+                        >
+                          <div onClick={() => toggleProduct(item.productId)} className="cursor-pointer">
+                            <img
+                              src={item.image.localFilePath?.startsWith('http') ? item.image.localFilePath : item.image.localFilePath ? `/api${item.image.localFilePath}` : item.image.amazonImageUrl}
+                              alt={item.title}
+                              className={`w-full h-24 object-contain transition-all ${
+                                item.selected ? "" : "opacity-40 grayscale"
+                              }`}
+                            />
+                            <p className="text-xs truncate mt-1 text-muted-foreground">
+                              {item.asin || item.title.substring(0, 15)}
+                            </p>
                           </div>
-                        )}
-                      </div>
-                    ))}
+                          {item.selected && (
+                            <div className="absolute top-0.5 right-0.5 bg-success text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">
+                              &#10003;
+                            </div>
+                          )}
+                          {/* Close-up reference uploader */}
+                          <div className="mt-1 pt-1 border-t border-border">
+                            {ref ? (
+                              <div className="flex items-center gap-1">
+                                <img src={ref} alt="close-up" className="w-8 h-8 object-cover rounded border border-border" />
+                                <button
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); clearReference(item.productId) }}
+                                  className="text-xs text-destructive hover:underline"
+                                  title="Remove close-up"
+                                >
+                                  remove
+                                </button>
+                              </div>
+                            ) : (
+                              <label
+                                className="flex items-center justify-center text-xs text-primary hover:underline cursor-pointer"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                + close-up
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  className="hidden"
+                                  onChange={async (e) => {
+                                    const f = e.target.files?.[0]
+                                    if (f) await handleReferenceUpload(item.productId, f)
+                                    e.target.value = ""
+                                  }}
+                                />
+                              </label>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
                   </div>
                 </div>
               )}
@@ -903,36 +1016,75 @@ export default function BulkGeneratePage() {
                           <p className="text-sm text-muted-foreground text-center py-4">No generated images found for this job.</p>
                         ) : (
                           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-                            {(jobImages[hJob.id] || []).map(img => (
-                              <Link
-                                key={img.id}
-                                href={`/products/${img.product.id}`}
-                                className="block border border-border rounded-lg bg-card overflow-hidden hover:shadow-sm transition group"
-                              >
-                                <div className="relative">
-                                  <img
-                                    src={getImageUrl(img)}
-                                    alt={img.fileName}
-                                    className="w-full h-32 object-contain bg-card"
-                                  />
-                                  <span className={`absolute top-1 right-1 px-1.5 py-0.5 text-xs rounded ${
-                                    img.status === "COMPLETED" ? "bg-success/20 text-success" :
-                                    img.status === "REJECTED" ? "bg-destructive/20 text-destructive" :
-                                    "bg-muted text-muted-foreground"
-                                  }`}>
-                                    {img.status === "COMPLETED" ? "OK" : img.status}
-                                  </span>
+                            {(jobImages[hJob.id] || []).map(img => {
+                              const smallerKey = `${img.id}:smaller`
+                              const biggerKey = `${img.id}:bigger`
+                              const regenKey = `${img.id}:regenerate`
+                              const isSmaller = imageActionLoading === smallerKey
+                              const isBigger = imageActionLoading === biggerKey
+                              const isRegen = imageActionLoading === regenKey
+                              const isAnyLoading = isSmaller || isBigger || isRegen
+                              const canAct = img.status === "COMPLETED"
+                              return (
+                                <div key={img.id} className="border border-border rounded-lg bg-card overflow-hidden hover:shadow-sm transition group">
+                                  <Link href={`/products/${img.product.id}`} className="block">
+                                    <div className="relative">
+                                      <img
+                                        src={getImageUrl(img)}
+                                        alt={img.fileName}
+                                        className="w-full h-32 object-contain bg-card"
+                                      />
+                                      <span className={`absolute top-1 right-1 px-1.5 py-0.5 text-xs rounded ${
+                                        img.status === "COMPLETED" ? "bg-success/20 text-success" :
+                                        img.status === "REJECTED" ? "bg-destructive/20 text-destructive" :
+                                        "bg-muted text-muted-foreground"
+                                      }`}>
+                                        {img.status === "COMPLETED" ? "OK" : img.status}
+                                      </span>
+                                    </div>
+                                    <div className="p-2">
+                                      <p className="text-xs font-medium text-foreground truncate group-hover:text-primary">
+                                        {img.product.asin || img.product.title.substring(0, 20)}
+                                      </p>
+                                      <p className="text-xs text-muted-foreground truncate">
+                                        {img.templateName || img.template?.name || img.imageType?.name || "Generated"}
+                                      </p>
+                                    </div>
+                                  </Link>
+                                  {canAct && (
+                                    <div className="px-2 pb-2 flex gap-1">
+                                      <button
+                                        type="button"
+                                        disabled={isAnyLoading}
+                                        onClick={() => handleImageAction(hJob.id, img, "smaller")}
+                                        className="flex-1 text-xs px-1 py-1 rounded bg-accent text-foreground hover:bg-muted disabled:opacity-50"
+                                        title="Re-render with the product ~15% smaller"
+                                      >
+                                        {isSmaller ? "…" : "− smaller"}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        disabled={isAnyLoading}
+                                        onClick={() => handleImageAction(hJob.id, img, "bigger")}
+                                        className="flex-1 text-xs px-1 py-1 rounded bg-accent text-foreground hover:bg-muted disabled:opacity-50"
+                                        title="Re-render with the product ~15% bigger"
+                                      >
+                                        {isBigger ? "…" : "+ bigger"}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        disabled={isAnyLoading}
+                                        onClick={() => handleImageAction(hJob.id, img, "regenerate")}
+                                        className="flex-1 text-xs px-1 py-1 rounded bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-50"
+                                        title="Re-roll with the same source and prompt"
+                                      >
+                                        {isRegen ? "…" : "↻ regen"}
+                                      </button>
+                                    </div>
+                                  )}
                                 </div>
-                                <div className="p-2">
-                                  <p className="text-xs font-medium text-foreground truncate group-hover:text-primary">
-                                    {img.product.asin || img.product.title.substring(0, 20)}
-                                  </p>
-                                  <p className="text-xs text-muted-foreground truncate">
-                                    {img.templateName || img.template?.name || img.imageType?.name || "Generated"}
-                                  </p>
-                                </div>
-                              </Link>
-                            ))}
+                              )
+                            })}
                           </div>
                         )}
                       </div>
