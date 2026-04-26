@@ -24,17 +24,22 @@ export async function GET(req: NextRequest) {
     },
   })
 
+  const hasEnvAds =
+    !!process.env.AMAZON_ADS_CLIENT_ID &&
+    !!process.env.AMAZON_ADS_CLIENT_SECRET &&
+    !!process.env.AMAZON_ADS_REFRESH_TOKEN &&
+    !!process.env.AMAZON_ADS_PROFILE_ID
+  const hasEnvSp = !!process.env.AMAZON_REFRESH_TOKEN
+
   const results: any[] = []
   for (const org of orgs) {
-    if (org.amazonConnections.length === 0 && org.amazonAdsConnections.length === 0) continue
+    const hasSp = org.amazonConnections.length > 0 || hasEnvSp
+    const hasAds = org.amazonAdsConnections.length > 0 || hasEnvAds
+    if (!hasSp && !hasAds) continue
     const orgRes: any = { org: org.slug }
     try {
-      if (org.amazonConnections.length > 0) {
-        orgRes.inventory = await refreshCurrentInventory(org.id)
-      }
-      if (org.amazonAdsConnections.length > 0) {
-        orgRes.ads = await syncAdsDaily(org.id, 7)
-      }
+      if (hasSp) orgRes.inventory = await refreshCurrentInventory(org.id)
+      if (hasAds) orgRes.ads = await syncAdsDaily(org.id, 7)
     } catch (e: any) {
       orgRes.error = e?.message || String(e)
     }

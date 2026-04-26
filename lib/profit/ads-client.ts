@@ -69,13 +69,31 @@ export async function adsApiCall<T>(
 
 export async function getAdsCredsForOrg(organizationId: string): Promise<AdsCredentials | null> {
   const conn = await prisma.amazonAdsConnection.findFirst({ where: { organizationId, isActive: true } })
-  if (!conn) return null
-  const region = (["na", "eu", "fe"].includes(conn.region) ? conn.region : "na") as "na" | "eu" | "fe"
-  return {
-    clientId: conn.clientId ? safeDecrypt(conn.clientId) : process.env.AMAZON_ADS_CLIENT_ID || "",
-    clientSecret: conn.clientSecret ? safeDecrypt(conn.clientSecret) : process.env.AMAZON_ADS_CLIENT_SECRET || "",
-    refreshToken: safeDecrypt(conn.refreshToken),
-    profileId: conn.profileId,
-    region,
+  if (conn) {
+    const region = (["na", "eu", "fe"].includes(conn.region) ? conn.region : "na") as "na" | "eu" | "fe"
+    return {
+      clientId: conn.clientId ? safeDecrypt(conn.clientId) : process.env.AMAZON_ADS_CLIENT_ID || "",
+      clientSecret: conn.clientSecret ? safeDecrypt(conn.clientSecret) : process.env.AMAZON_ADS_CLIENT_SECRET || "",
+      refreshToken: safeDecrypt(conn.refreshToken),
+      profileId: conn.profileId,
+      region,
+    }
   }
+  // Fall back to env vars (single-org dev or single-account prod setups)
+  if (
+    process.env.AMAZON_ADS_CLIENT_ID &&
+    process.env.AMAZON_ADS_CLIENT_SECRET &&
+    process.env.AMAZON_ADS_REFRESH_TOKEN &&
+    process.env.AMAZON_ADS_PROFILE_ID
+  ) {
+    const envRegion = (process.env.AMAZON_ADS_REGION || "na") as "na" | "eu" | "fe"
+    return {
+      clientId: process.env.AMAZON_ADS_CLIENT_ID,
+      clientSecret: process.env.AMAZON_ADS_CLIENT_SECRET,
+      refreshToken: process.env.AMAZON_ADS_REFRESH_TOKEN,
+      profileId: process.env.AMAZON_ADS_PROFILE_ID,
+      region: ["na", "eu", "fe"].includes(envRegion) ? envRegion : "na",
+    }
+  }
+  return null
 }
