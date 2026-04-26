@@ -105,16 +105,23 @@ export async function syncAdsDaily(organizationId: string, daysBack: number = 7)
     const adProducts = ["SPONSORED_PRODUCTS", "SPONSORED_BRANDS", "SPONSORED_DISPLAY"] as const
     const allRows: { adProduct: string; rows: any[] }[] = []
 
+    const perProductErrors: string[] = []
     for (const ap of adProducts) {
       try {
         const reportId = await submitAdReport(c, ap, startDate, endDate)
         const url = await pollReport(c, reportId)
-        if (!url) continue
+        if (!url) {
+          perProductErrors.push(`${ap}: report poll returned no URL (likely FAILED status)`)
+          continue
+        }
         const rows = await downloadAndParse(url)
         allRows.push({ adProduct: ap, rows })
-      } catch (e) {
-        // continue with other ad products
+      } catch (e: any) {
+        perProductErrors.push(`${ap}: ${e?.message || String(e)}`)
       }
+    }
+    if (perProductErrors.length) {
+      console.error("[ads-sync] per-product errors:", perProductErrors)
     }
 
     // Aggregate per (date, campaign) and per (date)
@@ -194,11 +201,17 @@ export async function syncAdsDaily(organizationId: string, daysBack: number = 7)
       })
     }
 
+    const finalStatus = perProductErrors.length === adProducts.length ? "FAILED" : "DONE"
     await prisma.adSyncLog.update({
       where: { id: log.id },
-      data: { status: "DONE", rowsImported: totalRows, completedAt: new Date() },
+      data: {
+        status: finalStatus,
+        rowsImported: totalRows,
+        errorMessage: perProductErrors.length ? perProductErrors.join(" | ") : null,
+        completedAt: new Date(),
+      },
     })
-    return { totalRows, durationMs: Date.now() - start }
+    return { totalRows, durationMs: Date.now() - start, perProductErrors }
   } catch (e: any) {
     await prisma.adSyncLog.update({
       where: { id: log.id },
