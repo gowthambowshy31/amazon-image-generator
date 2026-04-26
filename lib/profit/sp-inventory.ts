@@ -1,10 +1,9 @@
 import { prisma } from "@/lib/prisma"
-import { getAmazonSPCredsForOrg, getAllAmazonInventory } from "@/lib/channels/amazon-sp"
+import { getAmazonSPClientForOrg } from "@/lib/amazon-sp"
 
 export async function refreshCurrentInventory(organizationId: string) {
-  const c = await getAmazonSPCredsForOrg(organizationId)
-  if (!c) throw new Error("No active Amazon connection")
-  const items = await getAllAmazonInventory(c)
+  const sp = await getAmazonSPClientForOrg(organizationId)
+  const items = await sp.getInventorySummariesWithDetail()
   let upserted = 0
   for (const item of items) {
     await prisma.currentInventory.upsert({
@@ -13,16 +12,26 @@ export async function refreshCurrentInventory(organizationId: string) {
         organizationId,
         asin: item.asin,
         sku: item.sellerSku,
+        fnsku: item.fnSku,
         productName: item.productName,
-        fulfillableQty: item.inventoryDetails.fulfillableQuantity,
-        totalQty: item.inventoryDetails.fulfillableQuantity,
+        fulfillableQty: item.fulfillableQuantity,
+        reservedQty: item.reservedQuantity,
+        inboundQty:
+          item.inboundWorkingQuantity + item.inboundShippedQuantity + item.inboundReceivingQuantity,
+        unfulfillableQty: item.unfulfillableQuantity,
+        totalQty: item.totalQuantity,
         lastUpdated: new Date(),
       },
       update: {
         sku: item.sellerSku,
+        fnsku: item.fnSku,
         productName: item.productName,
-        fulfillableQty: item.inventoryDetails.fulfillableQuantity,
-        totalQty: item.inventoryDetails.fulfillableQuantity,
+        fulfillableQty: item.fulfillableQuantity,
+        reservedQty: item.reservedQuantity,
+        inboundQty:
+          item.inboundWorkingQuantity + item.inboundShippedQuantity + item.inboundReceivingQuantity,
+        unfulfillableQty: item.unfulfillableQuantity,
+        totalQty: item.totalQuantity,
         lastUpdated: new Date(),
       },
     })
@@ -32,9 +41,8 @@ export async function refreshCurrentInventory(organizationId: string) {
 }
 
 export async function takeInventorySnapshot(organizationId: string, notes?: string) {
-  const c = await getAmazonSPCredsForOrg(organizationId)
-  if (!c) throw new Error("No active Amazon connection")
-  const items = await getAllAmazonInventory(c)
+  const sp = await getAmazonSPClientForOrg(organizationId)
+  const items = await sp.getInventorySummariesWithDetail()
 
   const snapshot = await prisma.inventorySnapshot.create({
     data: {
@@ -42,7 +50,7 @@ export async function takeInventorySnapshot(organizationId: string, notes?: stri
       snapshotDate: new Date(),
       source: "sp_api",
       totalAsins: items.length,
-      totalUnits: items.reduce((s, i) => s + (i.inventoryDetails.fulfillableQuantity || 0), 0),
+      totalUnits: items.reduce((s, i) => s + (i.totalQuantity || 0), 0),
       notes,
     },
   })
@@ -53,9 +61,14 @@ export async function takeInventorySnapshot(organizationId: string, notes?: stri
         snapshotId: snapshot.id,
         asin: item.asin,
         sku: item.sellerSku,
+        fnsku: item.fnSku,
         productName: item.productName,
-        fulfillableQty: item.inventoryDetails.fulfillableQuantity,
-        totalQty: item.inventoryDetails.fulfillableQuantity,
+        fulfillableQty: item.fulfillableQuantity,
+        reservedQty: item.reservedQuantity,
+        inboundQty:
+          item.inboundWorkingQuantity + item.inboundShippedQuantity + item.inboundReceivingQuantity,
+        unfulfillableQty: item.unfulfillableQuantity,
+        totalQty: item.totalQuantity,
       },
     })
   }

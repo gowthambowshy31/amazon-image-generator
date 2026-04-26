@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma"
-import { getAmazonSPCredsForOrg, getAllAmazonInventory } from "./amazon-sp"
+import { getAmazonSPClientForOrg } from "@/lib/amazon-sp"
 import { getValidEbayToken } from "./ebay-auth"
 import { updateInventoryQuantity } from "./ebay-inventory"
 import { withRetry, isRetryableError } from "./retry"
@@ -32,13 +32,12 @@ export async function syncChannelInventory(organizationId: string): Promise<Chan
     const config = await prisma.channelsSyncConfig.findUnique({ where: { organizationId } })
     const quantityBuffer = config?.quantityBuffer ?? 5
 
-    const amazonCreds = await getAmazonSPCredsForOrg(organizationId)
-    if (!amazonCreds) throw new Error("No active Amazon connection for org")
-
-    const items = await getAllAmazonInventory(amazonCreds)
+    const sp = await getAmazonSPClientForOrg(organizationId)
+    const items = await sp.getInventorySummariesWithDetail()
     totalAmazonItems = items.length
 
     for (const item of items) {
+      if (!item.sellerSku) continue
       try {
         await prisma.channelSku.upsert({
           where: { organizationId_amazonSku: { organizationId, amazonSku: item.sellerSku } },
@@ -47,13 +46,13 @@ export async function syncChannelInventory(organizationId: string): Promise<Chan
             amazonSku: item.sellerSku,
             amazonAsin: item.asin,
             title: item.productName,
-            amazonQuantity: item.inventoryDetails.fulfillableQuantity,
+            amazonQuantity: item.fulfillableQuantity,
             lastSyncedAt: new Date(),
           },
           update: {
             amazonAsin: item.asin,
             title: item.productName,
-            amazonQuantity: item.inventoryDetails.fulfillableQuantity,
+            amazonQuantity: item.fulfillableQuantity,
             lastSyncedAt: new Date(),
             lastSyncError: null,
           },

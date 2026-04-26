@@ -314,6 +314,72 @@ export class AmazonSPService {
   }
 
   /**
+   * Full inventory summary, including the inventoryDetails breakdown
+   * (fulfillable / reserved / inbound / unfulfillable) and SKU/FNSKU.
+   * Auto-throttle is handled by amazon-sp-api when the SP-API returns 429.
+   */
+  async getInventorySummariesWithDetail(): Promise<Array<{
+    asin: string
+    sellerSku: string | null
+    fnSku: string | null
+    productName: string | null
+    fulfillableQuantity: number
+    reservedQuantity: number
+    inboundWorkingQuantity: number
+    inboundShippedQuantity: number
+    inboundReceivingQuantity: number
+    unfulfillableQuantity: number
+    totalQuantity: number
+  }>> {
+    const out: any[] = []
+    let nextToken: string | undefined
+
+    do {
+      const queryParams: any = {
+        marketplaceIds: this.marketplaceId,
+        granularityType: "Marketplace",
+        granularityId: this.marketplaceId,
+        details: true,
+      }
+      if (nextToken) queryParams.nextToken = nextToken
+
+      const response: any = await this.client.callAPI({
+        operation: "getInventorySummaries",
+        endpoint: "fbaInventory",
+        query: queryParams,
+      })
+
+      const summaries = response?.inventorySummaries || []
+      for (const item of summaries) {
+        if (!item?.asin) continue
+        const d = item.inventoryDetails || {}
+        const reserved = d.reservedQuantity?.totalReservedQuantity ?? 0
+        const inboundWorking = d.inboundWorkingQuantity ?? 0
+        const inboundShipped = d.inboundShippedQuantity ?? 0
+        const inboundReceiving = d.inboundReceivingQuantity ?? 0
+        const unfulfillable = d.unfulfillableQuantity?.totalUnfulfillableQuantity ?? 0
+        out.push({
+          asin: item.asin,
+          sellerSku: item.sellerSku ?? null,
+          fnSku: item.fnSku ?? null,
+          productName: item.productName ?? null,
+          fulfillableQuantity: d.fulfillableQuantity ?? 0,
+          reservedQuantity: reserved,
+          inboundWorkingQuantity: inboundWorking,
+          inboundShippedQuantity: inboundShipped,
+          inboundReceivingQuantity: inboundReceiving,
+          unfulfillableQuantity: unfulfillable,
+          totalQuantity: item.totalQuantity ?? 0,
+        })
+      }
+
+      nextToken = response?.nextToken
+    } while (nextToken)
+
+    return out
+  }
+
+  /**
    * Get the Seller SKU for a given ASIN by searching FBA inventory
    * The Seller SKU is required by the Listings API (not the ASIN)
    */
