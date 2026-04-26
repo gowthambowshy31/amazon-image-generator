@@ -33,6 +33,8 @@ model Organization {
   adPerformanceDaily     AdPerformanceDaily[]
   adCampaignDaily        AdCampaignDaily[]
   adSyncLogs             AdSyncLog[]
+  adsReportQueue         AdsReportQueue[]
+  adProductDaily         AdProductDaily[]
   reimbursements         Reimbursement[]
   potentialClaims        PotentialClaim[]
   reimbursementClaims    ReimbursementClaim[]
@@ -1057,6 +1059,74 @@ model AdSyncLog {
 
   @@index([organizationId])
   @@index([status])
+}
+
+// Parallel queue for Amazon Ads async reports.
+// Lifecycle: SUBMITTED → PENDING → COMPLETED → DOWNLOADED → PROCESSED (or FAILED)
+model AdsReportQueue {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  reportType String // sp_performance | sd_performance | sb_performance | sp_search_terms | etc.
+  startDate  DateTime
+  endDate    DateTime
+
+  amazonReportId String? // returned by POST /reporting/reports
+  status         String  @default("SUBMITTED") // SUBMITTED|PENDING|DOWNLOADED|PROCESSED|FAILED
+  downloadUrl    String? @db.Text
+
+  rowsDownloaded Int?
+  rowsImported   Int?
+  errorMessage   String? @db.Text
+
+  batchId String?
+
+  createdAt    DateTime  @default(now())
+  submittedAt  DateTime?
+  completedAt  DateTime?
+  downloadedAt DateTime?
+  processedAt  DateTime?
+
+  @@index([organizationId, status])
+  @@index([batchId])
+  @@index([amazonReportId])
+}
+
+// Per-ASIN per-campaign daily ad performance (from spAdvertisedProduct/sdAdvertisedProduct)
+model AdProductDaily {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  date           DateTime
+
+  advertisedAsin String
+  advertisedSku  String?
+  campaignId     String
+  campaignName   String?
+  adGroupId      String?
+  adGroupName    String?
+  adProduct      String // SPONSORED_PRODUCTS | SPONSORED_DISPLAY | SPONSORED_BRANDS
+
+  impressions Int   @default(0)
+  clicks      Int   @default(0)
+  spend       Float @default(0)
+  sales7d     Float @default(0)
+  sales14d    Float @default(0)
+  sales30d    Float @default(0)
+  units7d     Int   @default(0)
+  units14d    Int   @default(0)
+  units30d    Int   @default(0)
+  orders7d    Int   @default(0)
+  orders14d   Int   @default(0)
+  orders30d   Int   @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, date, advertisedAsin, campaignId])
+  @@index([organizationId, date])
+  @@index([organizationId, advertisedAsin])
 }
 
 // ----- Reimbursements -----

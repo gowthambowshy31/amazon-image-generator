@@ -51,19 +51,24 @@ export async function adsApiCall<T>(
 ): Promise<T> {
   const token = await getAdsAccessToken(c)
   const url = `${ADS_REGIONS[c.region]}${path}`
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${token}`,
+    "Amazon-Advertising-API-ClientId": c.clientId,
+    "Amazon-Advertising-API-Scope": c.profileId,
+    ...(options.headers || {}),
+  }
+  // Only set a default Content-Type if a body is present and caller didn't specify
+  if (options.body && !headers["Content-Type"]) {
+    headers["Content-Type"] = "application/json"
+  }
   const r = await fetch(url, {
     method: options.method ?? "GET",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Amazon-Advertising-API-ClientId": c.clientId,
-      "Amazon-Advertising-API-Scope": c.profileId,
-      "Content-Type": "application/vnd.createasyncreportrequest.v3+json",
-      Accept: "application/vnd.createasyncreportresponse.v3+json",
-      ...options.headers,
-    },
+    headers,
     body: options.body ? JSON.stringify(options.body) : undefined,
   })
-  if (!r.ok) throw new Error(`Ads API ${options.method ?? "GET"} ${path} failed: ${r.status} ${await r.text()}`)
+  if (!r.ok) {
+    throw new Error(`Ads API ${options.method ?? "GET"} ${path} failed: ${r.status} ${await r.text()}`)
+  }
   return (await r.json()) as T
 }
 
