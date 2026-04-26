@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { requireAuth } from "@/lib/auth-helpers"
 import { generateImage } from "@/lib/gemini"
+import { GeminiRateLimitError } from "@/lib/gemini-image"
 import { uploadToS3 } from "@/lib/s3"
+import { reserveOne, releaseOne, markExhausted, QuotaExceededError, getNextPTMidnight } from "@/lib/quota"
 import { z } from "zod"
 import path from "path"
 import fs from "fs/promises"
@@ -29,8 +31,8 @@ const bulkGenerateSchema = z.object({
   templateId: z.string().optional(),
   renderedPrompt: z.string().optional(),
   customPrompt: z.string().optional(),
-  // Map of productId -> base64 data URL of a close-up reference image
-  referenceImages: z.record(z.string(), z.string()).optional()
+  // Single global reference image for the entire bulk job (base64 data URL)
+  referenceImage: z.string().optional()
 }).refine(
   data => data.imageTypeId || data.templateId || data.renderedPrompt || data.customPrompt,
   { message: "Must provide imageTypeId, templateId, renderedPrompt, or customPrompt" }
@@ -180,8 +182,17 @@ async function processJob(
   let completedCount = 0
   let failedCount = 0
   const errors: string[] = []
+  let quotaStopped = false
+  let quotaResetsAt: Date | null = null
+
+  // Single global reference image (if provided) — write once, reuse for every product
+  let globalRefPath: string | null = null
+  if (validated.referenceImage) {
+    globalRefPath = await writeBase64ToTemp(validated.referenceImage)
+  }
 
   for (const product of products) {
+    if (quotaStopped) break
     try {
       console.log(`[Bulk Job ${jobId}] Processing product: ${product.asin || product.id} (${completedCount + failedCount + 1}/${products.length})`)
 
@@ -251,17 +262,12 @@ async function processJob(
         sourceImagePath = tempFilePath || undefined
       }
 
-      // Write close-up reference image (if provided) to temp
-      let refTempPath: string | null = null
+      // Attach the single global reference image (if present) for this product's call
       const additionalSourceImagePaths: string[] = []
-      const refDataUrl = validated.referenceImages?.[product.id]
-      if (refDataUrl) {
-        refTempPath = await writeBase64ToTemp(refDataUrl)
-        if (refTempPath) {
-          additionalSourceImagePaths.push(refTempPath)
-          // Append guidance so Gemini knows the second image is a detail reference
-          promptToUse = `${promptToUse}\n\nReference: The second image is a close-up of the same product. Use it as the source of truth for fine detail, structure, and proportions. Preserve every detail visible in the close-up; do not invent or alter the design.`
-        }
+      if (globalRefPath) {
+        additionalSourceImagePaths.push(globalRefPath)
+        // Append guidance so Gemini knows the second image is a style/composition reference
+        promptToUse = `${promptToUse}\n\nReference: The second image is a style and composition reference. Use it for visual guidance on framing, scale, lighting, and detail. Preserve the structure and identity of the actual product shown in the first image; do not alter the product's design.`
       }
 
       // Create pending image record
@@ -295,23 +301,59 @@ async function processJob(
         })
       }
 
-      // Generate the image
-      const result = await generateImage({
-        prompt: promptToUse,
-        sourceImagePath,
-        additionalSourceImagePaths,
-        outputPath
-      })
+      // Reserve a quota slot before calling Gemini. If we're at the daily cap,
+      // leave this product's row as PENDING (it didn't fail — it's just waiting)
+      // and stop processing the rest of the bulk job.
+      try {
+        await reserveOne()
+      } catch (err) {
+        if (err instanceof QuotaExceededError) {
+          await prisma.generatedImage.update({
+            where: { id: imageRecord.id },
+            data: { status: "PENDING" },
+          })
+          if (tempFilePath) { try { await fs.unlink(tempFilePath) } catch {} }
+          quotaStopped = true
+          quotaResetsAt = err.resetsAt
+          break
+        }
+        throw err
+      }
 
-      // Clean up temp source files
+      // Generate the image
+      let result: Awaited<ReturnType<typeof generateImage>>
+      try {
+        result = await generateImage({
+          prompt: promptToUse,
+          sourceImagePath,
+          additionalSourceImagePaths,
+          outputPath
+        })
+      } catch (err) {
+        // Gemini told us we're rate-limited despite our local counter — trust Google.
+        if (err instanceof GeminiRateLimitError) {
+          await markExhausted()
+          await releaseOne()
+          await prisma.generatedImage.update({
+            where: { id: imageRecord.id },
+            data: { status: "PENDING" },
+          })
+          if (tempFilePath) { try { await fs.unlink(tempFilePath) } catch {} }
+          quotaStopped = true
+          quotaResetsAt = getNextPTMidnight()
+          break
+        }
+        throw err
+      }
+
+      // Clean up temp source files (global ref persists across loop iterations)
       if (tempFilePath) {
         try { await fs.unlink(tempFilePath) } catch {}
       }
-      if (refTempPath) {
-        try { await fs.unlink(refTempPath) } catch {}
-      }
 
       if (!result.success) {
+        // Generation failed for non-quota reason — release the slot so the counter is accurate
+        await releaseOne()
         await prisma.generatedImage.update({
           where: { id: imageRecord.id },
           data: { status: "REJECTED" }
@@ -391,19 +433,35 @@ async function processJob(
     }
   }
 
+  // Clean up the global reference temp file
+  if (globalRefPath) {
+    try { await fs.unlink(globalRefPath) } catch {}
+  }
+
+  const remaining = products.length - completedCount - failedCount
+  const finalErrors = [...errors]
+  if (quotaStopped) {
+    const resetIso = (quotaResetsAt || getNextPTMidnight()).toISOString()
+    finalErrors.unshift(
+      `⚠️ Daily Gemini limit reached after ${completedCount}/${products.length}. ` +
+      `${remaining} product${remaining !== 1 ? "s" : ""} left as PENDING. Resets at ${resetIso} (PT midnight). ` +
+      `Re-run bulk generation tomorrow on the remaining products.`
+    )
+  }
+
   // Mark job as complete
   await prisma.generationJob.update({
     where: { id: jobId },
     data: {
-      status: failedCount === products.length ? "FAILED" : "COMPLETED",
+      status: failedCount === products.length && completedCount === 0 ? "FAILED" : "COMPLETED",
       completedImages: completedCount,
       failedImages: failedCount,
-      errorLog: errors.length > 0 ? errors.join("\n") : null,
+      errorLog: finalErrors.length > 0 ? finalErrors.join("\n") : null,
       completedAt: new Date()
     }
   })
 
-  console.log(`[Bulk Job ${jobId}] Job finished. ${completedCount} completed, ${failedCount} failed.`)
+  console.log(`[Bulk Job ${jobId}] Job finished. ${completedCount} completed, ${failedCount} failed${quotaStopped ? `, ${remaining} pending (quota)` : ""}.`)
 }
 
 async function updateJobProgress(

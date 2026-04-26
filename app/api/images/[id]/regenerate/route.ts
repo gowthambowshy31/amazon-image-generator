@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { requireAuth } from "@/lib/auth-helpers"
 import { generateImage } from "@/lib/gemini"
+import { GeminiRateLimitError } from "@/lib/gemini-image"
 import { uploadToS3 } from "@/lib/s3"
+import { reserveOne, releaseOne, markExhausted, QuotaExceededError, getNextPTMidnight } from "@/lib/quota"
 import path from "path"
 import fs from "fs/promises"
 import os from "os"
@@ -128,12 +130,45 @@ export async function POST(
       },
     })
 
-    const result = await generateImage({
-      prompt: promptToUse,
-      sourceImagePath: primaryPath,
-      additionalSourceImagePaths,
-      outputPath,
-    })
+    // Reserve a quota slot
+    try {
+      await reserveOne()
+    } catch (err) {
+      if (err instanceof QuotaExceededError) {
+        await prisma.generatedImage.delete({ where: { id: newRecord.id } })
+        if (primaryTemp) { try { await fs.unlink(primaryTemp) } catch {} }
+        if (refTemp) { try { await fs.unlink(refTemp) } catch {} }
+        return NextResponse.json(
+          { error: "Daily Gemini limit reached. Try again after PT midnight.", resetsAt: err.resetsAt.toISOString() },
+          { status: 429 }
+        )
+      }
+      throw err
+    }
+
+    let result: Awaited<ReturnType<typeof generateImage>>
+    try {
+      result = await generateImage({
+        prompt: promptToUse,
+        sourceImagePath: primaryPath,
+        additionalSourceImagePaths,
+        outputPath,
+      })
+    } catch (err) {
+      if (err instanceof GeminiRateLimitError) {
+        await markExhausted()
+        await releaseOne()
+        await prisma.generatedImage.delete({ where: { id: newRecord.id } })
+        if (primaryTemp) { try { await fs.unlink(primaryTemp) } catch {} }
+        if (refTemp) { try { await fs.unlink(refTemp) } catch {} }
+        return NextResponse.json(
+          { error: "Gemini rate-limited the request. Daily cap reached.", resetsAt: getNextPTMidnight().toISOString() },
+          { status: 429 }
+        )
+      }
+      await releaseOne()
+      throw err
+    }
 
     if (primaryTemp) {
       try { await fs.unlink(primaryTemp) } catch {}
@@ -143,6 +178,7 @@ export async function POST(
     }
 
     if (!result.success) {
+      await releaseOne()
       await prisma.generatedImage.update({
         where: { id: newRecord.id },
         data: { status: "REJECTED" },

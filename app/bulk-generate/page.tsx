@@ -113,8 +113,15 @@ export default function BulkGeneratePage() {
   const [selectedVariant, setSelectedVariant] = useState<string>("")
   const [templateSelection, setTemplateSelection] = useState<TemplateSelection | null>(null)
   const [customPrompt, setCustomPrompt] = useState<string>("")
-  // productId -> base64 data URL of an uploaded close-up reference image (in-memory, throwaway)
-  const [referenceImages, setReferenceImages] = useState<Record<string, string>>({})
+  // Single global reference image for the whole bulk job (in-memory, throwaway)
+  const [referenceImage, setReferenceImage] = useState<string | null>(null)
+  // Prompt mode: pick a template, or write a prompt directly inline
+  const [promptMode, setPromptMode] = useState<"template" | "direct">("template")
+  const [directPrompt, setDirectPrompt] = useState<string>("")
+  // Collapse the template gallery by default to reclaim screen space
+  const [templatesCollapsed, setTemplatesCollapsed] = useState(true)
+  // Today's Gemini quota snapshot
+  const [quota, setQuota] = useState<{ used: number; limit: number; remaining: number; resetsAt: string } | null>(null)
 
   // UI state
   const [loading, setLoading] = useState(true)
@@ -153,6 +160,7 @@ export default function BulkGeneratePage() {
             // Auto-switch to history tab and refresh
             setActiveTab("history")
             loadHistory(1)
+            refreshQuota()
           }
         }
       } catch {}
@@ -170,9 +178,10 @@ export default function BulkGeneratePage() {
 
   const loadData = async () => {
     try {
-      const [productsRes, variantsRes] = await Promise.all([
+      const [productsRes, variantsRes, quotaRes] = await Promise.all([
         fetch("/api/products"),
-        fetch("/api/products/variants-summary")
+        fetch("/api/products/variants-summary"),
+        fetch("/api/quota")
       ])
 
       if (productsRes.ok) setProducts(await productsRes.json())
@@ -180,11 +189,25 @@ export default function BulkGeneratePage() {
         const data = await variantsRes.json()
         setVariantSummary(data.variants)
       }
+      if (quotaRes.ok) {
+        const q = await quotaRes.json()
+        setQuota({ used: q.used, limit: q.limit, remaining: q.remaining, resetsAt: q.resetsAt })
+      }
     } catch (error) {
       console.error("Error loading data:", error)
     } finally {
       setLoading(false)
     }
+  }
+
+  const refreshQuota = async () => {
+    try {
+      const r = await fetch("/api/quota")
+      if (r.ok) {
+        const q = await r.json()
+        setQuota({ used: q.used, limit: q.limit, remaining: q.remaining, resetsAt: q.resetsAt })
+      }
+    } catch {}
   }
 
   const loadHistory = async (page: number) => {
@@ -219,7 +242,7 @@ export default function BulkGeneratePage() {
           : `/api/images/${image.id}/resize`
       const body =
         action === "regenerate"
-          ? { referenceImageBase64: referenceImages[image.product.id] || undefined }
+          ? { referenceImageBase64: referenceImage || undefined }
           : { direction: action }
       const res = await fetch(url, {
         method: "POST",
@@ -228,7 +251,15 @@ export default function BulkGeneratePage() {
       })
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
-        alert(`Failed: ${err.error || res.statusText}`)
+        if (res.status === 429 && err.resetsAt) {
+          const ms = new Date(err.resetsAt).getTime() - Date.now()
+          const hours = Math.max(0, Math.floor(ms / 3600000))
+          const mins = Math.max(0, Math.floor((ms % 3600000) / 60000))
+          alert(`Daily Gemini limit reached. Resets in ${hours}h ${mins}m (PT midnight).`)
+        } else {
+          alert(`Failed: ${err.error || res.statusText}`)
+        }
+        await refreshQuota()
         return
       }
       const newImage: JobImage = await res.json()
@@ -241,6 +272,7 @@ export default function BulkGeneratePage() {
         else next.unshift(newImage)
         return { ...prev, [jobId]: next }
       })
+      await refreshQuota()
     } catch (e) {
       console.error(e)
       alert("Action failed")
@@ -287,18 +319,12 @@ export default function BulkGeneratePage() {
     })
   }
 
-  const handleReferenceUpload = async (productId: string, file: File) => {
+  const handleReferenceUpload = async (file: File) => {
     const dataUrl = await readFileAsDataURL(file)
-    setReferenceImages(prev => ({ ...prev, [productId]: dataUrl }))
+    setReferenceImage(dataUrl)
   }
 
-  const clearReference = (productId: string) => {
-    setReferenceImages(prev => {
-      const next = { ...prev }
-      delete next[productId]
-      return next
-    })
-  }
+  const clearReference = () => setReferenceImage(null)
 
   const toggleSelectAll = () => {
     if (selectedProducts.size === filteredProducts.length && filteredProducts.length > 0) {
@@ -340,32 +366,36 @@ export default function BulkGeneratePage() {
   }, [products, selectedProducts])
 
   const handleGenerate = async () => {
-    if (selectedProducts.size === 0 || !selectedVariant || !templateSelection) return
+    if (selectedProducts.size === 0 || !selectedVariant) return
+    if (promptMode === "template" && !templateSelection) return
+    if (promptMode === "direct" && !directPrompt.trim()) return
 
     setGenerating(true)
     setJob(null)
 
     try {
-      const renderedPrompt = customPrompt.trim()
-        ? templateSelection.renderedPrompt + "\n\n" + customPrompt.trim()
-        : templateSelection.renderedPrompt
+      let body: any = {
+        productIds: Array.from(selectedProducts),
+        variant: selectedVariant,
+        referenceImage: referenceImage || undefined,
+      }
 
-      // Only include reference images for selected products
-      const referenceImagesPayload: Record<string, string> = {}
-      for (const pid of selectedProducts) {
-        if (referenceImages[pid]) referenceImagesPayload[pid] = referenceImages[pid]
+      if (promptMode === "template" && templateSelection) {
+        const renderedPrompt = customPrompt.trim()
+          ? templateSelection.renderedPrompt + "\n\n" + customPrompt.trim()
+          : templateSelection.renderedPrompt
+        body.templateId = templateSelection.templateId
+        body.renderedPrompt = renderedPrompt
+      } else {
+        // Direct mode: send the prompt as renderedPrompt; the server will do
+        // per-product variable substitution ({{product_name}} etc.)
+        body.renderedPrompt = directPrompt.trim()
       }
 
       const res = await fetch("/api/images/bulk-generate-by-variant", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          productIds: Array.from(selectedProducts),
-          variant: selectedVariant,
-          templateId: templateSelection.templateId,
-          renderedPrompt,
-          referenceImages: Object.keys(referenceImagesPayload).length > 0 ? referenceImagesPayload : undefined
-        })
+        body: JSON.stringify(body)
       })
 
       if (res.ok) {
@@ -456,8 +486,23 @@ export default function BulkGeneratePage() {
   return (
     <DashboardLayout>
       {/* Page Header */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-2">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-2 flex items-center justify-between gap-4">
         <h1 className="text-2xl font-bold text-foreground">Bulk Generate Images</h1>
+        {quota && (
+          <div
+            className={`text-xs px-3 py-1.5 rounded-md border ${
+              quota.remaining === 0
+                ? "bg-destructive/10 text-destructive border-destructive/30"
+                : quota.remaining <= 25
+                ? "bg-warning/10 text-warning border-warning/30"
+                : "bg-muted text-muted-foreground border-border"
+            }`}
+            title={`Resets at ${new Date(quota.resetsAt).toLocaleString()} (PT midnight)`}
+          >
+            Gemini today: <span className="font-semibold">{quota.used}</span> / {quota.limit} used
+            {quota.remaining === 0 && " — limit reached"}
+          </div>
+        )}
       </div>
 
       {/* Tab Bar */}
@@ -644,115 +689,180 @@ export default function BulkGeneratePage() {
                     </div>
                   </div>
                   <div className="grid grid-cols-3 md:grid-cols-6 lg:grid-cols-8 gap-2 max-h-80 overflow-y-auto">
-                    {previewImages.map((item) => {
-                      const ref = referenceImages[item.productId]
-                      return (
-                        <div
-                          key={item.productId}
-                          className={`relative border-2 rounded p-1 transition-all ${
-                            item.selected
-                              ? "border-success bg-success/10"
-                              : "border-border bg-card hover:border-input"
+                    {previewImages.map((item) => (
+                      <div
+                        key={item.productId}
+                        onClick={() => toggleProduct(item.productId)}
+                        className={`relative border-2 rounded p-1 cursor-pointer transition-all ${
+                          item.selected
+                            ? "border-success bg-success/10"
+                            : "border-border bg-card hover:border-input"
+                        }`}
+                      >
+                        <img
+                          src={item.image.localFilePath?.startsWith('http') ? item.image.localFilePath : item.image.localFilePath ? `/api${item.image.localFilePath}` : item.image.amazonImageUrl}
+                          alt={item.title}
+                          className={`w-full h-24 object-contain transition-all ${
+                            item.selected ? "" : "opacity-40 grayscale"
                           }`}
-                        >
-                          <div onClick={() => toggleProduct(item.productId)} className="cursor-pointer">
-                            <img
-                              src={item.image.localFilePath?.startsWith('http') ? item.image.localFilePath : item.image.localFilePath ? `/api${item.image.localFilePath}` : item.image.amazonImageUrl}
-                              alt={item.title}
-                              className={`w-full h-24 object-contain transition-all ${
-                                item.selected ? "" : "opacity-40 grayscale"
-                              }`}
-                            />
-                            <p className="text-xs truncate mt-1 text-muted-foreground">
-                              {item.asin || item.title.substring(0, 15)}
-                            </p>
+                        />
+                        <p className="text-xs truncate mt-1 text-muted-foreground">
+                          {item.asin || item.title.substring(0, 15)}
+                        </p>
+                        {item.selected && (
+                          <div className="absolute top-0.5 right-0.5 bg-success text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">
+                            &#10003;
                           </div>
-                          {item.selected && (
-                            <div className="absolute top-0.5 right-0.5 bg-success text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">
-                              &#10003;
-                            </div>
-                          )}
-                          {/* Close-up reference uploader */}
-                          <div className="mt-1 pt-1 border-t border-border">
-                            {ref ? (
-                              <div className="flex items-center gap-1">
-                                <img src={ref} alt="close-up" className="w-8 h-8 object-cover rounded border border-border" />
-                                <button
-                                  type="button"
-                                  onClick={(e) => { e.stopPropagation(); clearReference(item.productId) }}
-                                  className="text-xs text-destructive hover:underline"
-                                  title="Remove close-up"
-                                >
-                                  remove
-                                </button>
-                              </div>
-                            ) : (
-                              <label
-                                className="flex items-center justify-center text-xs text-primary hover:underline cursor-pointer"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                + close-up
-                                <input
-                                  type="file"
-                                  accept="image/*"
-                                  className="hidden"
-                                  onChange={async (e) => {
-                                    const f = e.target.files?.[0]
-                                    if (f) await handleReferenceUpload(item.productId, f)
-                                    e.target.value = ""
-                                  }}
-                                />
-                              </label>
-                            )}
-                          </div>
-                        </div>
-                      )
-                    })}
+                        )}
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
             </div>
           )}
 
-          {/* Step 3: Select Template */}
+          {/* Step 3: Reference image (optional, applies to whole bulk) */}
           {selectedProducts.size > 0 && selectedVariant && (
-            <>
-              <TemplateSelector
-                category="image"
-                mode="single"
-                onSelectionChange={(selections) => {
-                  setTemplateSelection(selections.length > 0 ? selections[0] : null)
-                }}
-              />
-
-              {/* Custom Prompt */}
-              <div className="bg-card border border-border rounded-lg shadow-sm p-6">
-                <h2 className="text-lg font-semibold text-foreground mb-1">
-                  {templateSelection ? "Additional Instructions (Optional)" : "Custom Prompt (Optional)"}
-                </h2>
-                <p className="text-sm text-muted-foreground mb-4">
-                  {templateSelection
-                    ? "Add any additional instructions to combine with the template prompt."
-                    : "Select a template above first, then optionally add extra instructions."
-                  }
-                </p>
-                <Textarea
-                  value={customPrompt}
-                  onChange={e => setCustomPrompt(e.target.value)}
-                  placeholder={templateSelection ? "Additional instructions (optional)..." : "Select a template first..."}
-                  className="min-h-[100px]"
-                />
-              </div>
-            </>
+            <div className="bg-card border border-border rounded-lg shadow-sm p-6">
+              <h2 className="text-lg font-semibold text-foreground mb-1">Step 3: Reference Image (optional)</h2>
+              <p className="text-sm text-muted-foreground mb-4">
+                Attach one image to guide style, framing, scale, and detail across every product in this bulk job. Skip if you don&apos;t need it.
+              </p>
+              {referenceImage ? (
+                <div className="flex items-center gap-3">
+                  <img src={referenceImage} alt="reference" className="w-24 h-24 object-contain border border-border rounded bg-background" />
+                  <button
+                    type="button"
+                    onClick={clearReference}
+                    className="text-sm text-destructive hover:underline"
+                  >
+                    Remove reference
+                  </button>
+                </div>
+              ) : (
+                <label className="inline-flex items-center gap-2 px-3 py-2 rounded border border-input bg-background hover:bg-accent cursor-pointer text-sm">
+                  + Upload reference image
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const f = e.target.files?.[0]
+                      if (f) await handleReferenceUpload(f)
+                      e.target.value = ""
+                    }}
+                  />
+                </label>
+              )}
+            </div>
           )}
 
-          {/* Step 4: Review & Generate */}
-          {selectedProducts.size > 0 && selectedVariant && templateSelection && (
+          {/* Step 4: Prompt — template OR direct */}
+          {selectedProducts.size > 0 && selectedVariant && (
+            <div className="space-y-4">
+              {/* Mode toggle */}
+              <div className="bg-card border border-border rounded-lg shadow-sm p-4 flex items-center gap-2">
+                <span className="text-sm font-medium text-foreground mr-2">Prompt:</span>
+                <button
+                  type="button"
+                  onClick={() => setPromptMode("template")}
+                  className={`px-3 py-1.5 text-sm rounded transition ${
+                    promptMode === "template" ? "bg-primary text-primary-foreground" : "bg-accent text-muted-foreground hover:bg-muted"
+                  }`}
+                >
+                  Use template
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPromptMode("direct")}
+                  className={`px-3 py-1.5 text-sm rounded transition ${
+                    promptMode === "direct" ? "bg-primary text-primary-foreground" : "bg-accent text-muted-foreground hover:bg-muted"
+                  }`}
+                >
+                  Write directly
+                </button>
+              </div>
+
+              {promptMode === "template" ? (
+                <>
+                  {/* Collapsible template gallery */}
+                  <div className="bg-card border border-border rounded-lg shadow-sm">
+                    <button
+                      type="button"
+                      onClick={() => setTemplatesCollapsed(c => !c)}
+                      className="w-full flex items-center justify-between p-4 hover:bg-accent transition"
+                    >
+                      <div className="text-left">
+                        <h2 className="text-lg font-semibold text-foreground">Template</h2>
+                        <p className="text-sm text-muted-foreground">
+                          {templateSelection ? `Selected: ${templateSelection.templateName}` : "Click to browse templates"}
+                        </p>
+                      </div>
+                      <span className="text-muted-foreground text-sm">
+                        {templatesCollapsed ? "▼ expand" : "▲ collapse"}
+                      </span>
+                    </button>
+                    {!templatesCollapsed && (
+                      <div className="p-4 pt-0">
+                        <TemplateSelector
+                          category="image"
+                          mode="single"
+                          onSelectionChange={(selections) => {
+                            setTemplateSelection(selections.length > 0 ? selections[0] : null)
+                          }}
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Additional instructions */}
+                  <div className="bg-card border border-border rounded-lg shadow-sm p-6">
+                    <h2 className="text-lg font-semibold text-foreground mb-1">
+                      {templateSelection ? "Additional Instructions (Optional)" : "Custom Prompt (Optional)"}
+                    </h2>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      {templateSelection
+                        ? "Add any additional instructions to combine with the template prompt."
+                        : "Select a template above first, then optionally add extra instructions."
+                      }
+                    </p>
+                    <Textarea
+                      value={customPrompt}
+                      onChange={e => setCustomPrompt(e.target.value)}
+                      placeholder={templateSelection ? "Additional instructions (optional)..." : "Select a template first..."}
+                      className="min-h-[100px]"
+                    />
+                  </div>
+                </>
+              ) : (
+                /* Direct prompt mode */
+                <div className="bg-card border border-border rounded-lg shadow-sm p-6">
+                  <h2 className="text-lg font-semibold text-foreground mb-1">Write Prompt Directly</h2>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Type your prompt here. Use variables for per-product substitution: <code className="px-1 bg-accent rounded">{"{{product_name}}"}</code> <code className="px-1 bg-accent rounded">{"{{asin}}"}</code> <code className="px-1 bg-accent rounded">{"{{category}}"}</code>
+                  </p>
+                  <Textarea
+                    value={directPrompt}
+                    onChange={e => setDirectPrompt(e.target.value)}
+                    placeholder="e.g. Professional product photo of {{product_name}}, white background, soft studio lighting, centered composition. Make the product appear small with plenty of negative space."
+                    className="min-h-[160px] font-mono text-sm"
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Step 5: Review & Generate */}
+          {selectedProducts.size > 0 && selectedVariant && (
+            (promptMode === "template" && templateSelection) ||
+            (promptMode === "direct" && directPrompt.trim().length > 0)
+          ) && (
             <div className="bg-card border border-border rounded-lg shadow-sm p-6">
               <h2 className="text-lg font-semibold text-foreground mb-4">Review & Generate</h2>
 
               <div className="bg-background rounded-lg p-4 mb-4">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
                   <div>
                     <p className="text-muted-foreground">Products Selected</p>
                     <p className="font-semibold text-foreground">{selectedProducts.size}</p>
@@ -762,10 +872,14 @@ export default function BulkGeneratePage() {
                     <p className="font-semibold text-foreground">{selectedVariant}</p>
                   </div>
                   <div>
-                    <p className="text-muted-foreground">Template</p>
-                    <p className="font-semibold text-foreground">
-                      {templateSelection.templateName}
+                    <p className="text-muted-foreground">Prompt Source</p>
+                    <p className="font-semibold text-foreground truncate">
+                      {promptMode === "template" ? (templateSelection?.templateName || "—") : "Direct"}
                     </p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Reference Image</p>
+                    <p className="font-semibold text-foreground">{referenceImage ? "Yes" : "No"}</p>
                   </div>
                   <div>
                     <p className="text-muted-foreground">Images to Generate</p>
@@ -775,6 +889,11 @@ export default function BulkGeneratePage() {
                     )}
                   </div>
                 </div>
+                {quota && eligibleCount > quota.remaining && (
+                  <p className="mt-3 text-xs text-warning">
+                    ⚠️ This bulk job needs {eligibleCount} generations but only {quota.remaining} are left in today&apos;s Gemini quota. The job will stop early; the remaining products will be left as PENDING and you can re-run them after PT midnight.
+                  </p>
+                )}
               </div>
 
               <div className="flex justify-center">

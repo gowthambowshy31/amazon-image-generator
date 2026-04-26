@@ -2,6 +2,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai"
 import fs from "fs/promises"
 import path from "path"
 import sharp from "sharp"
+import { GeminiRateLimitError } from "./gemini-image"
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "")
 
@@ -141,6 +142,14 @@ export async function generateImage(params: ImageGenerationParams): Promise<Gene
 
     console.log('📥 Received response from Gemini API, status:', response.status)
 
+    if (response.status === 429) {
+      const errorText = await response.text()
+      console.error('❌ Gemini API rate limit (429):', errorText.slice(0, 300))
+      const m = errorText.match(/retry in ([\d.]+)s/i)
+      const retryMs = m ? Math.ceil(parseFloat(m[1]) * 1000) + 500 : 30_000
+      throw new GeminiRateLimitError(retryMs, errorText.slice(0, 200))
+    }
+
     if (!response.ok) {
       const errorData = await response.json()
       console.error('❌ Gemini API error response:', JSON.stringify(errorData, null, 2))
@@ -202,6 +211,10 @@ export async function generateImage(params: ImageGenerationParams): Promise<Gene
       fileSize: stats.size
     }
   } catch (error: any) {
+    // Re-throw rate-limit errors so callers can handle them distinctly (queue,
+    // mark exhausted, surface reset time to the user, etc.)
+    if (error instanceof GeminiRateLimitError) throw error
+
     console.error("❌ Error generating image:", error)
 
     // If Gemini Imagen is not available, fall back to processing with Sharp
